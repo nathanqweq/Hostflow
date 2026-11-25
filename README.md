@@ -58,6 +58,37 @@ dist/deploy-hostflow-exemplos.sh  exemplos (não sobrescreve nada existente)
 
 ## Instalação
 
+### Com o instalador (recomendado)
+
+No servidor do **frontend**, como root:
+
+```bash
+git clone https://github.com/nathanqweq/Hostflow.git && cd Hostflow
+sudo bash install.sh              # ou: sudo bash install.sh --examples
+```
+
+O `install.sh` faz isto:
+- detecta o diretório do frontend e o usuário do PHP;
+- valida a sintaxe de todo o PHP com `php -l` e não instala nada se houver erro;
+- copia o módulo com troca atômica;
+- cria `/var/lib/zabbix-hostflow` com as permissões certas e o contexto SELinux;
+- gera `/etc/zabbix/hostflow.conf.php` se ele não existir;
+- testa se o usuário do PHP consegue gravar no diretório de dados.
+
+Reexecutar o script atualiza só o código do módulo. Formulários, listas e configuração nunca são sobrescritos.
+
+| Opção | Para quê |
+|---|---|
+| `--ui DIR` | frontend em caminho não padrão (diretório do `zabbix.php`) |
+| `--data-dir DIR` | outro diretório de dados |
+| `--web-user USER` | quando a detecção do usuário do PHP errar |
+| `--examples` | instala os exemplos sem sobrescrever nada |
+| `--uninstall` | remove o módulo e mantém dados e configuração |
+
+Depois siga os passos 5 e 6 abaixo, que são feitos na interface. Para atualizar no futuro: `git pull && sudo bash install.sh`.
+
+### Manual (sem git no servidor)
+
 **1. Encontre o diretório do frontend**, onde está o `zabbix.php`:
 
 ```bash
