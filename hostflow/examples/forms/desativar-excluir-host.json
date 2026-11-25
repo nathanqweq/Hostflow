@@ -17,7 +17,10 @@
             "valor_padrao": "",
             "quando": null,
             "mapeamento": [
-                { "alvo": "hostid", "padrao": "" }
+                {
+                    "alvo": "hostid",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -29,12 +32,21 @@
             "valor_padrao": "desativar",
             "lista": "",
             "opcoes": [
-                { "valor": "desativar", "rotulo": "Desativar (recomendado)" },
-                { "valor": "excluir", "rotulo": "Excluir definitivamente" }
+                {
+                    "valor": "desativar",
+                    "rotulo": "Desativar (recomendado)"
+                },
+                {
+                    "valor": "excluir",
+                    "rotulo": "Excluir definitivamente"
+                }
             ],
             "quando": null,
             "mapeamento": [
-                { "alvo": "operacao", "padrao": "" }
+                {
+                    "alvo": "operacao",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -44,12 +56,54 @@
             "obrigatorio": true,
             "ajuda": "",
             "valor_padrao": "",
-            "quando": { "campo": "operacao", "igual": "excluir" },
+            "quando": {
+                "logica": "e",
+                "regras": [
+                    {
+                        "campo": "operacao",
+                        "operador": "igual",
+                        "valores": [
+                            "excluir"
+                        ]
+                    }
+                ]
+            },
             "mapeamento": []
         }
     ],
     "valores_fixos": [
-        { "alvo": "groups[]", "valor": "Desativados", "modo": "adicionar", "quando": { "campo": "operacao", "igual": "desativar" } },
-        { "alvo": "tag:status", "valor": "desativado", "quando": { "campo": "operacao", "igual": "desativar" } }
+        {
+            "alvo": "groups[]",
+            "valor": "Desativados",
+            "modo": "adicionar",
+            "quando": {
+                "logica": "e",
+                "regras": [
+                    {
+                        "campo": "operacao",
+                        "operador": "igual",
+                        "valores": [
+                            "desativar"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "alvo": "tag:status",
+            "valor": "desativado",
+            "quando": {
+                "logica": "e",
+                "regras": [
+                    {
+                        "campo": "operacao",
+                        "operador": "igual",
+                        "valores": [
+                            "desativar"
+                        ]
+                    }
+                ]
+            }
+        }
     ]
 }

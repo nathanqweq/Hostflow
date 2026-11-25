@@ -19,9 +19,19 @@
             "opcoes": [],
             "quando": null,
             "mapeamento": [
-                { "alvo": "groups[]", "padrao": "Sites/{site.regiao}/{site}/Links", "modo": "adicionar" },
-                { "alvo": "tag:site", "padrao": "" },
-                { "alvo": "tag:cliente", "padrao": "{site.cliente}" }
+                {
+                    "alvo": "groups[]",
+                    "padrao": "Sites/{site.regiao}/{site}/Links",
+                    "modo": "adicionar"
+                },
+                {
+                    "alvo": "tag:site",
+                    "padrao": ""
+                },
+                {
+                    "alvo": "tag:cliente",
+                    "padrao": "{site.cliente}"
+                }
             ]
         },
         {
@@ -35,8 +45,14 @@
             "opcoes": [],
             "quando": null,
             "mapeamento": [
-                { "alvo": "host.host", "padrao": "LINK-{site}-{operadora}" },
-                { "alvo": "tag:operadora", "padrao": "" }
+                {
+                    "alvo": "host.host",
+                    "padrao": "LINK-{site}-{operadora}"
+                },
+                {
+                    "alvo": "tag:operadora",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -49,7 +65,10 @@
             "regex": "",
             "quando": null,
             "mapeamento": [
-                { "alvo": "host.name", "padrao": "" }
+                {
+                    "alvo": "host.name",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -62,7 +81,10 @@
             "regex": "",
             "quando": null,
             "mapeamento": [
-                { "alvo": "interface.ip", "padrao": "" }
+                {
+                    "alvo": "interface.ip",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -75,8 +97,14 @@
             "regex": "^[A-Za-z0-9/_.-]{3,64}$",
             "quando": null,
             "mapeamento": [
-                { "alvo": "macro:{$LINK.CIRCUITO}", "padrao": "" },
-                { "alvo": "inventory.serialno_a", "padrao": "" }
+                {
+                    "alvo": "macro:{$LINK.CIRCUITO}",
+                    "padrao": ""
+                },
+                {
+                    "alvo": "inventory.serialno_a",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -89,16 +117,44 @@
             "regex": "^[0-9]{1,6}$",
             "quando": null,
             "mapeamento": [
-                { "alvo": "macro:{$LINK.BANDA}", "padrao": "" }
+                {
+                    "alvo": "macro:{$LINK.BANDA}",
+                    "padrao": ""
+                }
             ]
         }
     ],
     "valores_fixos": [
-        { "alvo": "interface.type", "valor": "agent", "quando": null },
-        { "alvo": "interface.port", "valor": "10050", "quando": null },
-        { "alvo": "interface.useip", "valor": "1", "quando": null },
-        { "alvo": "proxy", "valor": "proxy-links", "quando": null },
-        { "alvo": "templates[]", "valor": "ICMP Ping", "modo": "vincular", "quando": null },
-        { "alvo": "tag:categoria", "valor": "LINK", "quando": null }
+        {
+            "alvo": "interface.type",
+            "valor": "agent",
+            "quando": null
+        },
+        {
+            "alvo": "interface.port",
+            "valor": "10050",
+            "quando": null
+        },
+        {
+            "alvo": "interface.useip",
+            "valor": "1",
+            "quando": null
+        },
+        {
+            "alvo": "proxy",
+            "valor": "proxy-links",
+            "quando": null
+        },
+        {
+            "alvo": "templates[]",
+            "valor": "ICMP Ping",
+            "modo": "vincular",
+            "quando": null
+        },
+        {
+            "alvo": "tag:categoria",
+            "valor": "LINK",
+            "quando": null
+        }
     ]
 }

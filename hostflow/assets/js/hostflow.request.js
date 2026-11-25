@@ -46,41 +46,59 @@
 		return result;
 	}
 
+	/*
+	 * Condição: {logica: "e"|"ou", regras: [{campo, operador: "igual"|"diferente", valores: [...]}]}.
+	 * Mesma semântica de Submission::conditionMet(): "igual" = tem algum dos valores; "diferente" = não tem
+	 * nenhum. Um campo oculto conta como vazio para quem depende dele.
+	 */
 	function initConditions(form) {
-		var conditional = form.querySelectorAll('[data-hf-when-field]');
+		var conditional = form.querySelectorAll('[data-hf-when]');
 
 		if (!conditional.length) {
 			return;
 		}
 
-		var rules = {};
+		var conditions = {};
 
 		conditional.forEach(function (el) {
-			rules[el.getAttribute('data-hf-field')] = {
-				field: el.getAttribute('data-hf-when-field'),
-				value: el.getAttribute('data-hf-when-value')
-			};
+			try {
+				conditions[el.getAttribute('data-hf-field')] = JSON.parse(el.getAttribute('data-hf-when'));
+			}
+			catch (e) {
+				// condição ilegível: o campo fica visível e o servidor decide.
+			}
 		});
 
-		function isVisible(id, seen) {
-			var rule = rules[id];
+		function isVisible(id, stack) {
+			var cond = conditions[id];
 
-			if (!rule) {
+			if (!cond || !cond.regras || !cond.regras.length) {
 				return true;
 			}
 
-			if (seen[id]) {
+			if (stack.indexOf(id) !== -1) {
 				return false; // ciclo: o servidor já impede, mas por segurança.
 			}
 
-			seen[id] = true;
+			var next = stack.concat([id]);
 
-			return isVisible(rule.field, seen) && valuesOf(form, rule.field).indexOf(rule.value) !== -1;
+			var results = cond.regras.map(function (rule) {
+				var current = isVisible(rule.campo, next) ? valuesOf(form, rule.campo) : [];
+				var hit = current.some(function (v) {
+					return rule.valores.indexOf(v) !== -1;
+				});
+
+				return rule.operador === 'diferente' ? !hit : hit;
+			});
+
+			return cond.logica === 'ou'
+				? results.indexOf(true) !== -1
+				: results.indexOf(false) === -1;
 		}
 
 		function apply() {
 			conditional.forEach(function (el) {
-				el.classList.toggle('hf-hidden', !isVisible(el.getAttribute('data-hf-field'), {}));
+				el.classList.toggle('hf-hidden', !isVisible(el.getAttribute('data-hf-field'), []));
 			});
 		}
 

@@ -86,6 +86,9 @@ final class FormSchema {
 	public const GROUP_MODES = ['adicionar', 'substituir_prefixo'];
 	public const TEMPLATE_MODES = ['vincular', 'desvincular'];
 
+	public const CONDITION_LOGICS = ['e', 'ou'];
+	public const CONDITION_OPERATORS = ['igual', 'diferente'];
+
 	public const INTERFACE_TYPES = ['agent', 'snmp', 'ipmi', 'jmx'];
 	public const OPERATIONS = ['desativar', 'excluir'];
 
@@ -402,18 +405,72 @@ final class FormSchema {
 		}
 	}
 
+	/**
+	 * Condição de exibição/aplicação:
+	 *   {"logica": "e"|"ou", "regras": [{"campo": "x", "operador": "igual"|"diferente", "valores": ["a", "b"]}]}
+	 *
+	 * Uma regra "igual" é verdadeira se o campo tiver QUALQUER um dos valores; "diferente", se não tiver nenhum.
+	 * As regras são combinadas com E (todas) ou OU (qualquer uma).
+	 * O formato antigo {"campo": "x", "igual": "a"} é convertido automaticamente.
+	 */
 	private function validateCondition($raw, string $label, array $field_ids, ?string $self_id): ?array {
-		if (!is_array($raw) || self::str($raw, 'campo') === '') {
+		if (!is_array($raw)) {
 			return null;
 		}
 
-		$cond = ['campo' => self::str($raw, 'campo'), 'igual' => self::str($raw, 'igual')];
-
-		if (!in_array($cond['campo'], $field_ids, true) || $cond['campo'] === $self_id) {
-			$this->error($label, sprintf('condição "exibir quando" referencia campo inválido "%s".', $cond['campo']));
+		if (array_key_exists('campo', $raw)) {
+			$raw = [
+				'logica' => 'e',
+				'regras' => [[
+					'campo' => $raw['campo'],
+					'operador' => 'igual',
+					'valores' => [self::str($raw, 'igual')]
+				]]
+			];
 		}
 
-		return $cond;
+		$logic = self::str($raw, 'logica') ?: 'e';
+
+		if (!in_array($logic, self::CONDITION_LOGICS, true)) {
+			$this->error($label, 'lógica da condição deve ser "e" ou "ou".');
+			$logic = 'e';
+		}
+
+		$rules = [];
+
+		foreach (is_array($raw['regras'] ?? null) ? array_values($raw['regras']) : [] as $k => $rule) {
+			if (!is_array($rule) || self::str($rule, 'campo') === '') {
+				continue;
+			}
+
+			$where = sprintf('%s, condição #%d', $label, $k + 1);
+			$field = self::str($rule, 'campo');
+			$operator = self::str($rule, 'operador') ?: 'igual';
+
+			if (!in_array($field, $field_ids, true) || $field === $self_id) {
+				$this->error($where, sprintf('referencia campo inválido "%s".', $field));
+			}
+
+			if (!in_array($operator, self::CONDITION_OPERATORS, true)) {
+				$this->error($where, 'operador deve ser "igual" ou "diferente".');
+			}
+
+			$values = $rule['valores'] ?? [];
+
+			if (is_string($values)) {
+				$values = explode(',', $values);
+			}
+
+			$values = is_array($values) ? self::normalizeStringList($values) : [];
+
+			if (!$values) {
+				$this->error($where, 'informe pelo menos um valor.');
+			}
+
+			$rules[] = ['campo' => $field, 'operador' => $operator, 'valores' => $values];
+		}
+
+		return $rules ? ['logica' => $logic, 'regras' => $rules] : null;
 	}
 
 	private function validateTypeRules(array $form): void {
@@ -524,6 +581,31 @@ final class FormSchema {
 				$this->error($labels[$kind], implode(', ', $list));
 			}
 		}
+	}
+
+	/**
+	 * Converte condições do formato antigo ({campo, igual}) para o atual, sem validar.
+	 * Usado na leitura de formulários gravados antes da mudança.
+	 */
+	public static function upgradeForm(array $form): array {
+		foreach (['campos', 'valores_fixos'] as $section) {
+			foreach ($form[$section] ?? [] as $i => $item) {
+				$cond = $item['quando'] ?? null;
+
+				if (is_array($cond) && array_key_exists('campo', $cond)) {
+					$form[$section][$i]['quando'] = ($cond['campo'] === '') ? null : [
+						'logica' => 'e',
+						'regras' => [[
+							'campo' => (string) $cond['campo'],
+							'operador' => 'igual',
+							'valores' => [(string) ($cond['igual'] ?? '')]
+						]]
+					];
+				}
+			}
+		}
+
+		return $form;
 	}
 
 	public static function isValidTarget(string $target, ?string &$reason = null): bool {

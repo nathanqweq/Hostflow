@@ -264,9 +264,8 @@ foreach ($form_def['campos'] as $field) {
 	foreach ([$label, $field_el] as $el) {
 		$el->setAttribute('data-hf-field', $id);
 
-		if ($field['quando'] !== null) {
-			$el->setAttribute('data-hf-when-field', $field['quando']['campo']);
-			$el->setAttribute('data-hf-when-value', $field['quando']['igual']);
+		if (!empty($field['quando']['regras'])) {
+			$el->setAttribute('data-hf-when', $field['quando']);
 		}
 
 		// Em update/move/delete, os demais campos só aparecem depois de escolher o host.

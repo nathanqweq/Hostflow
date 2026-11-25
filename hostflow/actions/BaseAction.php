@@ -44,7 +44,14 @@ abstract class BaseAction extends CController {
 		$lists = [];
 
 		foreach ($this->repo()->lists() as $id => $list) {
-			$lists[] = ['id' => $id, 'nome' => $list['nome'] ?? $id];
+			$lists[] = [
+				'id' => $id,
+				'nome' => $list['nome'] ?? $id,
+				// Para o editor de condições oferecer os valores da lista como caixas de seleção.
+				'itens' => array_map(static function (array $item): array {
+					return [(string) $item['valor'], (string) ($item['rotulo'] ?? $item['valor'])];
+				}, $list['itens'] ?? [])
+			];
 		}
 
 		return [

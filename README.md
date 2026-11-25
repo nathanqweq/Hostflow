@@ -149,7 +149,7 @@ semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/zabbix-hostflow(/.*)?' 
   "campos": [{
     "id": "site", "rotulo": "Site", "tipo": "select", "obrigatorio": true,
     "lista": "sites",                                // ou "opcoes": [{"valor","rotulo"}]
-    "quando": {"campo": "x", "igual": "y"},          // opcional: exibir só quando
+    "quando": null,                                  // opcional: ver "Condições" abaixo
     "mapeamento": [
       {"alvo": "groups[]", "padrao": "Sites/{site.regiao}/{site}/{funcao}", "modo": "adicionar"},
       {"alvo": "tag:site"}
@@ -158,6 +158,26 @@ semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/zabbix-hostflow(/.*)?' 
   "valores_fixos": [{"alvo": "tag:categoria", "valor": "REDE", "quando": null}]
 }
 ```
+
+### Condições ("Exibir quando" / "Aplicar quando")
+
+Campos e valores fixos aceitam uma condição com uma ou mais regras:
+
+```jsonc
+"quando": {
+  "logica": "ou",                                    // "e" = todas as regras; "ou" = qualquer uma
+  "regras": [
+    {"campo": "funcao", "operador": "igual",     "valores": ["Switches/Core"]},
+    {"campo": "site",   "operador": "diferente", "valores": ["SITE_A", "SITE_B"]}
+  ]
+}
+```
+
+- Com vários valores, `igual` é verdadeira se o campo tiver **qualquer um** deles. `diferente` é verdadeira se o campo não tiver **nenhum** deles.
+- Checkbox vale `1` quando está marcado e `0` quando não está.
+- Um campo oculto conta como vazio para as regras que dependem dele, tanto no navegador quanto no servidor.
+- No construtor: **+ condição**, depois **+ regra**, e o seletor **E/OU** a partir da segunda regra. Se o campo referenciado tem lista fechada (select, lista compartilhada ou checkbox), os valores aparecem como caixas de seleção. Caso contrário, digite os valores separados por vírgula.
+- O formato antigo `{"campo": "x", "igual": "y"}` continua aceito e é convertido automaticamente.
 
 - **Tipos de campo:** `text`, `textarea`, `ip`, `dns`, `checkbox`, `select`, `multiselect`, `tag_value`, `zbx_hostgroup` (com `prefixo`), `zbx_template` / `zbx_proxy` / `zbx_proxy_group` (com `permitidos`), `zbx_host`.
 - **Alvos:**

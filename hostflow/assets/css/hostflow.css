@@ -283,6 +283,51 @@
 	align-items: center;
 }
 
+.hf-b-cond-rules {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+}
+
+.hf-b-rule {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+
+.hf-b-rule select {
+	width: auto;
+	min-width: 140px;
+}
+
+.hf-b-rule-logic {
+	min-width: 64px !important;
+	font-weight: bold;
+}
+
+span.hf-b-rule-logic {
+	display: inline-block;
+	text-align: center;
+}
+
+.hf-b-vals {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 12px;
+	max-width: 520px;
+}
+
+.hf-b-vals-text {
+	min-width: 200px;
+}
+
+.hf-b-cond-foot {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
 .hf-b-target-base {
 	min-width: 220px;
 }

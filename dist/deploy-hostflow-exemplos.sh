@@ -36,7 +36,10 @@ put "$DATA/forms/desativar-excluir-host.json" <<'HOSTFLOW_EOF'
             "valor_padrao": "",
             "quando": null,
             "mapeamento": [
-                { "alvo": "hostid", "padrao": "" }
+                {
+                    "alvo": "hostid",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -48,12 +51,21 @@ put "$DATA/forms/desativar-excluir-host.json" <<'HOSTFLOW_EOF'
             "valor_padrao": "desativar",
             "lista": "",
             "opcoes": [
-                { "valor": "desativar", "rotulo": "Desativar (recomendado)" },
-                { "valor": "excluir", "rotulo": "Excluir definitivamente" }
+                {
+                    "valor": "desativar",
+                    "rotulo": "Desativar (recomendado)"
+                },
+                {
+                    "valor": "excluir",
+                    "rotulo": "Excluir definitivamente"
+                }
             ],
             "quando": null,
             "mapeamento": [
-                { "alvo": "operacao", "padrao": "" }
+                {
+                    "alvo": "operacao",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -63,13 +75,55 @@ put "$DATA/forms/desativar-excluir-host.json" <<'HOSTFLOW_EOF'
             "obrigatorio": true,
             "ajuda": "",
             "valor_padrao": "",
-            "quando": { "campo": "operacao", "igual": "excluir" },
+            "quando": {
+                "logica": "e",
+                "regras": [
+                    {
+                        "campo": "operacao",
+                        "operador": "igual",
+                        "valores": [
+                            "excluir"
+                        ]
+                    }
+                ]
+            },
             "mapeamento": []
         }
     ],
     "valores_fixos": [
-        { "alvo": "groups[]", "valor": "Desativados", "modo": "adicionar", "quando": { "campo": "operacao", "igual": "desativar" } },
-        { "alvo": "tag:status", "valor": "desativado", "quando": { "campo": "operacao", "igual": "desativar" } }
+        {
+            "alvo": "groups[]",
+            "valor": "Desativados",
+            "modo": "adicionar",
+            "quando": {
+                "logica": "e",
+                "regras": [
+                    {
+                        "campo": "operacao",
+                        "operador": "igual",
+                        "valores": [
+                            "desativar"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "alvo": "tag:status",
+            "valor": "desativado",
+            "quando": {
+                "logica": "e",
+                "regras": [
+                    {
+                        "campo": "operacao",
+                        "operador": "igual",
+                        "valores": [
+                            "desativar"
+                        ]
+                    }
+                ]
+            }
+        }
     ]
 }
 HOSTFLOW_EOF
@@ -96,9 +150,19 @@ put "$DATA/forms/novo-link-internet.json" <<'HOSTFLOW_EOF'
             "opcoes": [],
             "quando": null,
             "mapeamento": [
-                { "alvo": "groups[]", "padrao": "Sites/{site.regiao}/{site}/Links", "modo": "adicionar" },
-                { "alvo": "tag:site", "padrao": "" },
-                { "alvo": "tag:cliente", "padrao": "{site.cliente}" }
+                {
+                    "alvo": "groups[]",
+                    "padrao": "Sites/{site.regiao}/{site}/Links",
+                    "modo": "adicionar"
+                },
+                {
+                    "alvo": "tag:site",
+                    "padrao": ""
+                },
+                {
+                    "alvo": "tag:cliente",
+                    "padrao": "{site.cliente}"
+                }
             ]
         },
         {
@@ -112,8 +176,14 @@ put "$DATA/forms/novo-link-internet.json" <<'HOSTFLOW_EOF'
             "opcoes": [],
             "quando": null,
             "mapeamento": [
-                { "alvo": "host.host", "padrao": "LINK-{site}-{operadora}" },
-                { "alvo": "tag:operadora", "padrao": "" }
+                {
+                    "alvo": "host.host",
+                    "padrao": "LINK-{site}-{operadora}"
+                },
+                {
+                    "alvo": "tag:operadora",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -126,7 +196,10 @@ put "$DATA/forms/novo-link-internet.json" <<'HOSTFLOW_EOF'
             "regex": "",
             "quando": null,
             "mapeamento": [
-                { "alvo": "host.name", "padrao": "" }
+                {
+                    "alvo": "host.name",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -139,7 +212,10 @@ put "$DATA/forms/novo-link-internet.json" <<'HOSTFLOW_EOF'
             "regex": "",
             "quando": null,
             "mapeamento": [
-                { "alvo": "interface.ip", "padrao": "" }
+                {
+                    "alvo": "interface.ip",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -152,8 +228,14 @@ put "$DATA/forms/novo-link-internet.json" <<'HOSTFLOW_EOF'
             "regex": "^[A-Za-z0-9/_.-]{3,64}$",
             "quando": null,
             "mapeamento": [
-                { "alvo": "macro:{$LINK.CIRCUITO}", "padrao": "" },
-                { "alvo": "inventory.serialno_a", "padrao": "" }
+                {
+                    "alvo": "macro:{$LINK.CIRCUITO}",
+                    "padrao": ""
+                },
+                {
+                    "alvo": "inventory.serialno_a",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -166,17 +248,45 @@ put "$DATA/forms/novo-link-internet.json" <<'HOSTFLOW_EOF'
             "regex": "^[0-9]{1,6}$",
             "quando": null,
             "mapeamento": [
-                { "alvo": "macro:{$LINK.BANDA}", "padrao": "" }
+                {
+                    "alvo": "macro:{$LINK.BANDA}",
+                    "padrao": ""
+                }
             ]
         }
     ],
     "valores_fixos": [
-        { "alvo": "interface.type", "valor": "agent", "quando": null },
-        { "alvo": "interface.port", "valor": "10050", "quando": null },
-        { "alvo": "interface.useip", "valor": "1", "quando": null },
-        { "alvo": "proxy", "valor": "proxy-links", "quando": null },
-        { "alvo": "templates[]", "valor": "ICMP Ping", "modo": "vincular", "quando": null },
-        { "alvo": "tag:categoria", "valor": "LINK", "quando": null }
+        {
+            "alvo": "interface.type",
+            "valor": "agent",
+            "quando": null
+        },
+        {
+            "alvo": "interface.port",
+            "valor": "10050",
+            "quando": null
+        },
+        {
+            "alvo": "interface.useip",
+            "valor": "1",
+            "quando": null
+        },
+        {
+            "alvo": "proxy",
+            "valor": "proxy-links",
+            "quando": null
+        },
+        {
+            "alvo": "templates[]",
+            "valor": "ICMP Ping",
+            "modo": "vincular",
+            "quando": null
+        },
+        {
+            "alvo": "tag:categoria",
+            "valor": "LINK",
+            "quando": null
+        }
     ]
 }
 HOSTFLOW_EOF
@@ -203,9 +313,19 @@ put "$DATA/forms/novo-switch.json" <<'HOSTFLOW_EOF'
             "opcoes": [],
             "quando": null,
             "mapeamento": [
-                { "alvo": "groups[]", "padrao": "Sites/{site.regiao}/{site}/{funcao}", "modo": "adicionar" },
-                { "alvo": "tag:site", "padrao": "" },
-                { "alvo": "tag:cliente", "padrao": "{site.cliente}" }
+                {
+                    "alvo": "groups[]",
+                    "padrao": "Sites/{site.regiao}/{site}/{funcao}",
+                    "modo": "adicionar"
+                },
+                {
+                    "alvo": "tag:site",
+                    "padrao": ""
+                },
+                {
+                    "alvo": "tag:cliente",
+                    "padrao": "{site.cliente}"
+                }
             ]
         },
         {
@@ -217,8 +337,14 @@ put "$DATA/forms/novo-switch.json" <<'HOSTFLOW_EOF'
             "valor_padrao": "Switches",
             "lista": "",
             "opcoes": [
-                { "valor": "Switches", "rotulo": "Switch de acesso" },
-                { "valor": "Switches/Core", "rotulo": "Switch core" }
+                {
+                    "valor": "Switches",
+                    "rotulo": "Switch de acesso"
+                },
+                {
+                    "valor": "Switches/Core",
+                    "rotulo": "Switch core"
+                }
             ],
             "quando": null,
             "mapeamento": []
@@ -233,8 +359,14 @@ put "$DATA/forms/novo-switch.json" <<'HOSTFLOW_EOF'
             "regex": "^SW-[A-Z0-9_]+-[0-9]{2}$",
             "quando": null,
             "mapeamento": [
-                { "alvo": "host.host", "padrao": "" },
-                { "alvo": "host.name", "padrao": "" }
+                {
+                    "alvo": "host.host",
+                    "padrao": ""
+                },
+                {
+                    "alvo": "host.name",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -247,7 +379,10 @@ put "$DATA/forms/novo-switch.json" <<'HOSTFLOW_EOF'
             "regex": "",
             "quando": null,
             "mapeamento": [
-                { "alvo": "interface.ip", "padrao": "" }
+                {
+                    "alvo": "interface.ip",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -257,10 +392,16 @@ put "$DATA/forms/novo-switch.json" <<'HOSTFLOW_EOF'
             "obrigatorio": true,
             "ajuda": "",
             "valor_padrao": "",
-            "permitidos": ["proxy-01", "proxy-02"],
+            "permitidos": [
+                "proxy-01",
+                "proxy-02"
+            ],
             "quando": null,
             "mapeamento": [
-                { "alvo": "proxy", "padrao": "" }
+                {
+                    "alvo": "proxy",
+                    "padrao": ""
+                }
             ]
         },
         {
@@ -273,20 +414,130 @@ put "$DATA/forms/novo-switch.json" <<'HOSTFLOW_EOF'
             "regex": "",
             "quando": null,
             "mapeamento": [
-                { "alvo": "host.description", "padrao": "" }
+                {
+                    "alvo": "host.description",
+                    "padrao": ""
+                }
             ]
         }
     ],
     "valores_fixos": [
-        { "alvo": "interface.type", "valor": "snmp", "quando": null },
-        { "alvo": "interface.port", "valor": "161", "quando": null },
-        { "alvo": "interface.useip", "valor": "1", "quando": null },
-        { "alvo": "interface.snmp.version", "valor": "2", "quando": null },
-        { "alvo": "interface.snmp.community", "valor": "{$SNMP_COMMUNITY}", "quando": null },
-        { "alvo": "templates[]", "valor": "Network Generic Device by SNMP", "modo": "vincular", "quando": null },
-        { "alvo": "tag:categoria", "valor": "REDE", "quando": null },
-        { "alvo": "tag:funcao", "valor": "ACESSO", "quando": { "campo": "funcao", "igual": "Switches" } },
-        { "alvo": "tag:funcao", "valor": "CORE", "quando": { "campo": "funcao", "igual": "Switches/Core" } }
+        {
+            "alvo": "interface.type",
+            "valor": "snmp",
+            "quando": null
+        },
+        {
+            "alvo": "interface.port",
+            "valor": "161",
+            "quando": null
+        },
+        {
+            "alvo": "interface.useip",
+            "valor": "1",
+            "quando": null
+        },
+        {
+            "alvo": "interface.snmp.version",
+            "valor": "2",
+            "quando": null
+        },
+        {
+            "alvo": "interface.snmp.community",
+            "valor": "{$SNMP_COMMUNITY}",
+            "quando": null
+        },
+        {
+            "alvo": "templates[]",
+            "valor": "Network Generic Device by SNMP",
+            "modo": "vincular",
+            "quando": null
+        },
+        {
+            "alvo": "tag:categoria",
+            "valor": "REDE",
+            "quando": null
+        },
+        {
+            "alvo": "tag:funcao",
+            "valor": "ACESSO",
+            "quando": {
+                "logica": "e",
+                "regras": [
+                    {
+                        "campo": "funcao",
+                        "operador": "igual",
+                        "valores": [
+                            "Switches"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "alvo": "tag:funcao",
+            "valor": "CORE",
+            "quando": {
+                "logica": "e",
+                "regras": [
+                    {
+                        "campo": "funcao",
+                        "operador": "igual",
+                        "valores": [
+                            "Switches/Core"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "alvo": "tag:criticidade",
+            "valor": "ALTA",
+            "quando": {
+                "logica": "ou",
+                "regras": [
+                    {
+                        "campo": "funcao",
+                        "operador": "igual",
+                        "valores": [
+                            "Switches/Core"
+                        ]
+                    },
+                    {
+                        "campo": "site",
+                        "operador": "igual",
+                        "valores": [
+                            "SITE_A",
+                            "SITE_B"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "alvo": "tag:criticidade",
+            "valor": "NORMAL",
+            "quando": {
+                "logica": "e",
+                "regras": [
+                    {
+                        "campo": "funcao",
+                        "operador": "diferente",
+                        "valores": [
+                            "Switches/Core"
+                        ]
+                    },
+                    {
+                        "campo": "site",
+                        "operador": "diferente",
+                        "valores": [
+                            "SITE_A",
+                            "SITE_B"
+                        ]
+                    }
+                ]
+            }
+        }
     ]
 }
 HOSTFLOW_EOF

@@ -114,7 +114,14 @@ abstract class BaseAction extends CController {
 		$lists = [];
 
 		foreach ($this->repo()->lists() as $id => $list) {
-			$lists[] = ['id' => $id, 'nome' => $list['nome'] ?? $id];
+			$lists[] = [
+				'id' => $id,
+				'nome' => $list['nome'] ?? $id,
+				// Para o editor de condições oferecer os valores da lista como caixas de seleção.
+				'itens' => array_map(static function (array $item): array {
+					return [(string) $item['valor'], (string) ($item['rotulo'] ?? $item['valor'])];
+				}, $list['itens'] ?? [])
+			];
 		}
 
 		return [
@@ -1250,6 +1257,51 @@ cat > "$MOD/assets/css/hostflow.css" <<'HOSTFLOW_EOF'
 	align-items: center;
 }
 
+.hf-b-cond-rules {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+}
+
+.hf-b-rule {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+
+.hf-b-rule select {
+	width: auto;
+	min-width: 140px;
+}
+
+.hf-b-rule-logic {
+	min-width: 64px !important;
+	font-weight: bold;
+}
+
+span.hf-b-rule-logic {
+	display: inline-block;
+	text-align: center;
+}
+
+.hf-b-vals {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 12px;
+	max-width: 520px;
+}
+
+.hf-b-vals-text {
+	min-width: 200px;
+}
+
+.hf-b-cond-foot {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
 .hf-b-target-base {
 	min-width: 220px;
 }
@@ -1542,24 +1594,158 @@ cat > "$MOD/assets/js/hostflow.builder.js" <<'HOSTFLOW_EOF'
 		return h('div', {class: 'hf-b-mode hf-b-muted', text: '—'});
 	}
 
+	/*
+	 * Condição: {logica: "e"|"ou", regras: [{campo, operador: "igual"|"diferente", valores: [...]}]}.
+	 * Aceita o formato antigo {campo, igual} e converte.
+	 */
+	function normalizeCondition(cond) {
+		if (!cond || typeof cond !== 'object') {
+			return null;
+		}
+
+		if ('campo' in cond) {
+			return cond.campo ? {logica: 'e', regras: [{campo: cond.campo, operador: 'igual',
+				valores: [String(cond.igual || '')]}]} : null;
+		}
+
+		if (!Array.isArray(cond.regras) || !cond.regras.length) {
+			return null;
+		}
+
+		cond.logica = cond.logica === 'ou' ? 'ou' : 'e';
+		cond.regras.forEach(function (r) {
+			r.operador = r.operador === 'diferente' ? 'diferente' : 'igual';
+			r.valores = Array.isArray(r.valores) ? r.valores : [];
+		});
+
+		return cond;
+	}
+
+	/* Valores possíveis do campo referenciado, quando ele tem lista fechada. */
+	function knownValues(fieldId) {
+		var f = state.campos.filter(function (c) {
+			return c.id === fieldId;
+		})[0];
+
+		if (!f) {
+			return null;
+		}
+
+		if (f.tipo === 'checkbox') {
+			return [['1', 'marcado'], ['0', 'desmarcado']];
+		}
+
+		if (!inArray(f.tipo, cfg.option_types)) {
+			return null;
+		}
+
+		if (f.lista) {
+			var list = cfg.lists.filter(function (l) {
+				return l.id === f.lista;
+			})[0];
+
+			return list ? list.itens : null;
+		}
+
+		return (f.opcoes || []).map(function (o) {
+			return [o.valor, o.rotulo || o.valor];
+		});
+	}
+
+	function valuesEditor(rule) {
+		var known = rule.campo ? knownValues(rule.campo) : null;
+
+		if (known && known.length) {
+			var box = h('div', {class: 'hf-b-vals'});
+
+			known.forEach(function (opt) {
+				box.appendChild(checkbox(inArray(opt[0], rule.valores), function (on) {
+					rule.valores = rule.valores.filter(function (v) {
+						return v !== opt[0];
+					});
+
+					if (on) {
+						rule.valores.push(opt[0]);
+					}
+				}, opt[1]));
+			});
+
+			return box;
+		}
+
+		return textInput(rule.valores.join(', '), function (v) {
+			rule.valores = v.split(',').map(function (s) {
+				return s.trim();
+			}).filter(Boolean);
+		}, {placeholder: 'valor1, valor2', class: 'hf-b-vals-text'});
+	}
+
 	function conditionEditor(owner, selfId) {
-		var others = [['', '— sempre exibir —']].concat(state.campos.filter(function (f) {
+		var cond = normalizeCondition(owner.quando);
+		owner.quando = cond;
+
+		var fieldOpts = [['', '— campo —']].concat(state.campos.filter(function (f) {
 			return f.id && f.id !== selfId;
 		}).map(function (f) {
 			return [f.id, f.id + (f.rotulo ? ' (' + f.rotulo + ')' : '')];
 		}));
 
-		var cond = owner.quando || {campo: '', igual: ''};
+		function newRule() {
+			return {campo: '', operador: 'igual', valores: []};
+		}
 
-		return h('div', {class: 'hf-b-cond'},
-			select(cond.campo, others, function (v) {
-				owner.quando = v ? {campo: v, igual: cond.igual || ''} : null;
-				render();
-			}),
-			cond.campo ? h('span', {class: 'hf-b-muted', text: ' for igual a '}) : null,
-			cond.campo ? textInput(cond.igual, function (v) {
-				owner.quando.igual = v;
-			}, {placeholder: 'valor (checkbox: 1)'}) : null
+		if (!cond) {
+			return h('div', {class: 'hf-b-cond'},
+				h('span', {class: 'hf-b-muted', text: 'Sempre '}),
+				button('+ condição', function () {
+					owner.quando = {logica: 'e', regras: [newRule()]};
+					render();
+				})
+			);
+		}
+
+		var rows = cond.regras.map(function (rule, k) {
+			return h('div', {class: 'hf-b-rule'},
+				(k === 0)
+					? h('span', {class: 'hf-b-rule-logic', text: 'Se'})
+					: select(cond.logica, [['e', 'E'], ['ou', 'OU']], function (v) {
+						cond.logica = v;
+						render();
+					}, {class: 'hf-b-rule-logic', title: 'Vale para todas as regras desta condição'}),
+				select(rule.campo, fieldOpts, function (v) {
+					rule.campo = v;
+					rule.valores = [];
+					render();
+				}),
+				select(rule.operador, [['igual', 'for igual a'], ['diferente', 'for diferente de']], function (v) {
+					rule.operador = v;
+				}),
+				valuesEditor(rule),
+				button('✕', function () {
+					cond.regras.splice(k, 1);
+
+					if (!cond.regras.length) {
+						owner.quando = null;
+					}
+
+					render();
+				}, 'btn-alt hf-b-icon', 'Remover regra')
+			);
+		});
+
+		return h('div', {class: 'hf-b-cond hf-b-cond-rules'},
+			rows,
+			h('div', {class: 'hf-b-cond-foot'},
+				button('+ regra', function () {
+					cond.regras.push(newRule());
+					render();
+				}),
+				(cond.regras.length > 1)
+					? h('span', {class: 'hf-b-hint', text: cond.logica === 'ou'
+						? 'OU: basta uma regra ser verdadeira.'
+						: 'E: todas as regras precisam ser verdadeiras.'})
+					: h('span', {class: 'hf-b-hint', text: 'Marque vários valores para "qualquer um destes".'})
+			)
 		);
 	}
 
@@ -1966,41 +2152,59 @@ cat > "$MOD/assets/js/hostflow.request.js" <<'HOSTFLOW_EOF'
 		return result;
 	}
 
+	/*
+	 * Condição: {logica: "e"|"ou", regras: [{campo, operador: "igual"|"diferente", valores: [...]}]}.
+	 * Mesma semântica de Submission::conditionMet(): "igual" = tem algum dos valores; "diferente" = não tem
+	 * nenhum. Um campo oculto conta como vazio para quem depende dele.
+	 */
 	function initConditions(form) {
-		var conditional = form.querySelectorAll('[data-hf-when-field]');
+		var conditional = form.querySelectorAll('[data-hf-when]');
 
 		if (!conditional.length) {
 			return;
 		}
 
-		var rules = {};
+		var conditions = {};
 
 		conditional.forEach(function (el) {
-			rules[el.getAttribute('data-hf-field')] = {
-				field: el.getAttribute('data-hf-when-field'),
-				value: el.getAttribute('data-hf-when-value')
-			};
+			try {
+				conditions[el.getAttribute('data-hf-field')] = JSON.parse(el.getAttribute('data-hf-when'));
+			}
+			catch (e) {
+				// condição ilegível: o campo fica visível e o servidor decide.
+			}
 		});
 
-		function isVisible(id, seen) {
-			var rule = rules[id];
+		function isVisible(id, stack) {
+			var cond = conditions[id];
 
-			if (!rule) {
+			if (!cond || !cond.regras || !cond.regras.length) {
 				return true;
 			}
 
-			if (seen[id]) {
+			if (stack.indexOf(id) !== -1) {
 				return false; // ciclo: o servidor já impede, mas por segurança.
 			}
 
-			seen[id] = true;
+			var next = stack.concat([id]);
 
-			return isVisible(rule.field, seen) && valuesOf(form, rule.field).indexOf(rule.value) !== -1;
+			var results = cond.regras.map(function (rule) {
+				var current = isVisible(rule.campo, next) ? valuesOf(form, rule.campo) : [];
+				var hit = current.some(function (v) {
+					return rule.valores.indexOf(v) !== -1;
+				});
+
+				return rule.operador === 'diferente' ? !hit : hit;
+			});
+
+			return cond.logica === 'ou'
+				? results.indexOf(true) !== -1
+				: results.indexOf(false) === -1;
 		}
 
 		function apply() {
 			conditional.forEach(function (el) {
-				el.classList.toggle('hf-hidden', !isVisible(el.getAttribute('data-hf-field'), {}));
+				el.classList.toggle('hf-hidden', !isVisible(el.getAttribute('data-hf-field'), []));
 			});
 		}
 
@@ -2208,6 +2412,9 @@ final class FormSchema {
 
 	public const GROUP_MODES = ['adicionar', 'substituir_prefixo'];
 	public const TEMPLATE_MODES = ['vincular', 'desvincular'];
+
+	public const CONDITION_LOGICS = ['e', 'ou'];
+	public const CONDITION_OPERATORS = ['igual', 'diferente'];
 
 	public const INTERFACE_TYPES = ['agent', 'snmp', 'ipmi', 'jmx'];
 	public const OPERATIONS = ['desativar', 'excluir'];
@@ -2525,18 +2732,72 @@ final class FormSchema {
 		}
 	}
 
+	/**
+	 * Condição de exibição/aplicação:
+	 *   {"logica": "e"|"ou", "regras": [{"campo": "x", "operador": "igual"|"diferente", "valores": ["a", "b"]}]}
+	 *
+	 * Uma regra "igual" é verdadeira se o campo tiver QUALQUER um dos valores; "diferente", se não tiver nenhum.
+	 * As regras são combinadas com E (todas) ou OU (qualquer uma).
+	 * O formato antigo {"campo": "x", "igual": "a"} é convertido automaticamente.
+	 */
 	private function validateCondition($raw, string $label, array $field_ids, ?string $self_id): ?array {
-		if (!is_array($raw) || self::str($raw, 'campo') === '') {
+		if (!is_array($raw)) {
 			return null;
 		}
 
-		$cond = ['campo' => self::str($raw, 'campo'), 'igual' => self::str($raw, 'igual')];
-
-		if (!in_array($cond['campo'], $field_ids, true) || $cond['campo'] === $self_id) {
-			$this->error($label, sprintf('condição "exibir quando" referencia campo inválido "%s".', $cond['campo']));
+		if (array_key_exists('campo', $raw)) {
+			$raw = [
+				'logica' => 'e',
+				'regras' => [[
+					'campo' => $raw['campo'],
+					'operador' => 'igual',
+					'valores' => [self::str($raw, 'igual')]
+				]]
+			];
 		}
 
-		return $cond;
+		$logic = self::str($raw, 'logica') ?: 'e';
+
+		if (!in_array($logic, self::CONDITION_LOGICS, true)) {
+			$this->error($label, 'lógica da condição deve ser "e" ou "ou".');
+			$logic = 'e';
+		}
+
+		$rules = [];
+
+		foreach (is_array($raw['regras'] ?? null) ? array_values($raw['regras']) : [] as $k => $rule) {
+			if (!is_array($rule) || self::str($rule, 'campo') === '') {
+				continue;
+			}
+
+			$where = sprintf('%s, condição #%d', $label, $k + 1);
+			$field = self::str($rule, 'campo');
+			$operator = self::str($rule, 'operador') ?: 'igual';
+
+			if (!in_array($field, $field_ids, true) || $field === $self_id) {
+				$this->error($where, sprintf('referencia campo inválido "%s".', $field));
+			}
+
+			if (!in_array($operator, self::CONDITION_OPERATORS, true)) {
+				$this->error($where, 'operador deve ser "igual" ou "diferente".');
+			}
+
+			$values = $rule['valores'] ?? [];
+
+			if (is_string($values)) {
+				$values = explode(',', $values);
+			}
+
+			$values = is_array($values) ? self::normalizeStringList($values) : [];
+
+			if (!$values) {
+				$this->error($where, 'informe pelo menos um valor.');
+			}
+
+			$rules[] = ['campo' => $field, 'operador' => $operator, 'valores' => $values];
+		}
+
+		return $rules ? ['logica' => $logic, 'regras' => $rules] : null;
 	}
 
 	private function validateTypeRules(array $form): void {
@@ -2647,6 +2908,31 @@ final class FormSchema {
 				$this->error($labels[$kind], implode(', ', $list));
 			}
 		}
+	}
+
+	/**
+	 * Converte condições do formato antigo ({campo, igual}) para o atual, sem validar.
+	 * Usado na leitura de formulários gravados antes da mudança.
+	 */
+	public static function upgradeForm(array $form): array {
+		foreach (['campos', 'valores_fixos'] as $section) {
+			foreach ($form[$section] ?? [] as $i => $item) {
+				$cond = $item['quando'] ?? null;
+
+				if (is_array($cond) && array_key_exists('campo', $cond)) {
+					$form[$section][$i]['quando'] = ($cond['campo'] === '') ? null : [
+						'logica' => 'e',
+						'regras' => [[
+							'campo' => (string) $cond['campo'],
+							'operador' => 'igual',
+							'valores' => [(string) ($cond['igual'] ?? '')]
+						]]
+					];
+				}
+			}
+		}
+
+		return $form;
 	}
 
 	public static function isValidTarget(string $target, ?string &$reason = null): bool {
@@ -3712,7 +3998,7 @@ final class Repository {
 	 * @return array<string, array>
 	 */
 	public function forms(bool $only_active = false): array {
-		$forms = $this->forms->all();
+		$forms = array_map([FormSchema::class, 'upgradeForm'], $this->forms->all());
 
 		if ($only_active) {
 			$forms = array_filter($forms, static function (array $form): bool {
@@ -3728,7 +4014,9 @@ final class Repository {
 	}
 
 	public function form(string $id): ?array {
-		return $this->forms->get($id);
+		$form = $this->forms->get($id);
+
+		return ($form !== null) ? FormSchema::upgradeForm($form) : null;
 	}
 
 	public function saveForm(array $form): void {
@@ -3839,10 +4127,12 @@ final class Submission {
 			$normalized[$field['id']] = self::normalize($field, $raw[$field['id']] ?? null);
 		}
 
+		$visible = self::visibility($this->form['campos'], $normalized);
+
 		foreach ($this->form['campos'] as $field) {
 			$id = $field['id'];
 
-			if (!self::isVisible($field, $normalized)) {
+			if (!$visible[$id]) {
 				$this->values[$id] = null;
 				continue;
 			}
@@ -4032,16 +4322,78 @@ final class Submission {
 		return ($field['tipo'] === 'textarea') ? trim(str_replace("\r\n", "\n", $raw)) : trim($raw);
 	}
 
-	public static function isVisible(array $field, array $values): bool {
-		$cond = $field['quando'] ?? null;
+	/**
+	 * Visibilidade de todos os campos. Um campo oculto conta como vazio para as condições que dependem dele
+	 * (mesma regra do navegador, em hostflow.request.js).
+	 *
+	 * @return array<string, bool>
+	 */
+	public static function visibility(array $fields, array $normalized): array {
+		$by_id = array_column($fields, null, 'id');
+		$visible = [];
 
-		if ($cond === null) {
+		$resolve = function (string $id, array $stack) use (&$resolve, &$visible, $by_id, $normalized): bool {
+			if (array_key_exists($id, $visible)) {
+				return $visible[$id];
+			}
+
+			if (!array_key_exists($id, $by_id) || in_array($id, $stack, true)) {
+				return false;
+			}
+
+			$stack[] = $id;
+
+			$result = self::conditionMet($by_id[$id]['quando'] ?? null,
+				function (string $ref) use (&$resolve, $stack, $normalized): array {
+					return $resolve($ref, $stack) ? self::asList($normalized[$ref] ?? null) : [];
+				}
+			);
+
+			return $visible[$id] = $result;
+		};
+
+		foreach ($fields as $field) {
+			$resolve($field['id'], []);
+		}
+
+		return $visible;
+	}
+
+	/**
+	 * Condição de um item (campo ou valor fixo) contra valores já resolvidos (null = campo oculto).
+	 */
+	public static function isVisible(array $item, array $values): bool {
+		return self::conditionMet($item['quando'] ?? null, function (string $ref) use ($values): array {
+			return self::asList($values[$ref] ?? null);
+		});
+	}
+
+	/**
+	 * @param callable $value_of  fn(string $campo): string[]
+	 */
+	public static function conditionMet(?array $cond, callable $value_of): bool {
+		if ($cond === null || empty($cond['regras'])) {
 			return true;
 		}
 
-		$other = $values[$cond['campo']] ?? null;
+		$results = [];
 
-		return is_array($other) ? in_array($cond['igual'], $other, true) : ((string) $other === $cond['igual']);
+		foreach ($cond['regras'] as $rule) {
+			$hit = (bool) array_intersect($value_of($rule['campo']), $rule['valores']);
+			$results[] = ($rule['operador'] === 'diferente') ? !$hit : $hit;
+		}
+
+		return (($cond['logica'] ?? 'e') === 'ou')
+			? in_array(true, $results, true)
+			: !in_array(false, $results, true);
+	}
+
+	private static function asList($value): array {
+		if ($value === null) {
+			return [];
+		}
+
+		return array_map('strval', is_array($value) ? array_values($value) : [$value]);
 	}
 
 	private function fieldError(string $id, string $message): void {
@@ -4988,9 +5340,8 @@ foreach ($form_def['campos'] as $field) {
 	foreach ([$label, $field_el] as $el) {
 		$el->setAttribute('data-hf-field', $id);
 
-		if ($field['quando'] !== null) {
-			$el->setAttribute('data-hf-when-field', $field['quando']['campo']);
-			$el->setAttribute('data-hf-when-value', $field['quando']['igual']);
+		if (!empty($field['quando']['regras'])) {
+			$el->setAttribute('data-hf-when', $field['quando']);
 		}
 
 		// Em update/move/delete, os demais campos só aparecem depois de escolher o host.

@@ -33,7 +33,7 @@ final class Repository {
 	 * @return array<string, array>
 	 */
 	public function forms(bool $only_active = false): array {
-		$forms = $this->forms->all();
+		$forms = array_map([FormSchema::class, 'upgradeForm'], $this->forms->all());
 
 		if ($only_active) {
 			$forms = array_filter($forms, static function (array $form): bool {
@@ -49,7 +49,9 @@ final class Repository {
 	}
 
 	public function form(string $id): ?array {
-		return $this->forms->get($id);
+		$form = $this->forms->get($id);
+
+		return ($form !== null) ? FormSchema::upgradeForm($form) : null;
 	}
 
 	public function saveForm(array $form): void {

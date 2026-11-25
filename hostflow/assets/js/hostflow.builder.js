@@ -258,24 +258,158 @@
 		return h('div', {class: 'hf-b-mode hf-b-muted', text: '—'});
 	}
 
+	/*
+	 * Condição: {logica: "e"|"ou", regras: [{campo, operador: "igual"|"diferente", valores: [...]}]}.
+	 * Aceita o formato antigo {campo, igual} e converte.
+	 */
+	function normalizeCondition(cond) {
+		if (!cond || typeof cond !== 'object') {
+			return null;
+		}
+
+		if ('campo' in cond) {
+			return cond.campo ? {logica: 'e', regras: [{campo: cond.campo, operador: 'igual',
+				valores: [String(cond.igual || '')]}]} : null;
+		}
+
+		if (!Array.isArray(cond.regras) || !cond.regras.length) {
+			return null;
+		}
+
+		cond.logica = cond.logica === 'ou' ? 'ou' : 'e';
+		cond.regras.forEach(function (r) {
+			r.operador = r.operador === 'diferente' ? 'diferente' : 'igual';
+			r.valores = Array.isArray(r.valores) ? r.valores : [];
+		});
+
+		return cond;
+	}
+
+	/* Valores possíveis do campo referenciado, quando ele tem lista fechada. */
+	function knownValues(fieldId) {
+		var f = state.campos.filter(function (c) {
+			return c.id === fieldId;
+		})[0];
+
+		if (!f) {
+			return null;
+		}
+
+		if (f.tipo === 'checkbox') {
+			return [['1', 'marcado'], ['0', 'desmarcado']];
+		}
+
+		if (!inArray(f.tipo, cfg.option_types)) {
+			return null;
+		}
+
+		if (f.lista) {
+			var list = cfg.lists.filter(function (l) {
+				return l.id === f.lista;
+			})[0];
+
+			return list ? list.itens : null;
+		}
+
+		return (f.opcoes || []).map(function (o) {
+			return [o.valor, o.rotulo || o.valor];
+		});
+	}
+
+	function valuesEditor(rule) {
+		var known = rule.campo ? knownValues(rule.campo) : null;
+
+		if (known && known.length) {
+			var box = h('div', {class: 'hf-b-vals'});
+
+			known.forEach(function (opt) {
+				box.appendChild(checkbox(inArray(opt[0], rule.valores), function (on) {
+					rule.valores = rule.valores.filter(function (v) {
+						return v !== opt[0];
+					});
+
+					if (on) {
+						rule.valores.push(opt[0]);
+					}
+				}, opt[1]));
+			});
+
+			return box;
+		}
+
+		return textInput(rule.valores.join(', '), function (v) {
+			rule.valores = v.split(',').map(function (s) {
+				return s.trim();
+			}).filter(Boolean);
+		}, {placeholder: 'valor1, valor2', class: 'hf-b-vals-text'});
+	}
+
 	function conditionEditor(owner, selfId) {
-		var others = [['', '— sempre exibir —']].concat(state.campos.filter(function (f) {
+		var cond = normalizeCondition(owner.quando);
+		owner.quando = cond;
+
+		var fieldOpts = [['', '— campo —']].concat(state.campos.filter(function (f) {
 			return f.id && f.id !== selfId;
 		}).map(function (f) {
 			return [f.id, f.id + (f.rotulo ? ' (' + f.rotulo + ')' : '')];
 		}));
 
-		var cond = owner.quando || {campo: '', igual: ''};
+		function newRule() {
+			return {campo: '', operador: 'igual', valores: []};
+		}
 
-		return h('div', {class: 'hf-b-cond'},
-			select(cond.campo, others, function (v) {
-				owner.quando = v ? {campo: v, igual: cond.igual || ''} : null;
-				render();
-			}),
-			cond.campo ? h('span', {class: 'hf-b-muted', text: ' for igual a '}) : null,
-			cond.campo ? textInput(cond.igual, function (v) {
-				owner.quando.igual = v;
-			}, {placeholder: 'valor (checkbox: 1)'}) : null
+		if (!cond) {
+			return h('div', {class: 'hf-b-cond'},
+				h('span', {class: 'hf-b-muted', text: 'Sempre '}),
+				button('+ condição', function () {
+					owner.quando = {logica: 'e', regras: [newRule()]};
+					render();
+				})
+			);
+		}
+
+		var rows = cond.regras.map(function (rule, k) {
+			return h('div', {class: 'hf-b-rule'},
+				(k === 0)
+					? h('span', {class: 'hf-b-rule-logic', text: 'Se'})
+					: select(cond.logica, [['e', 'E'], ['ou', 'OU']], function (v) {
+						cond.logica = v;
+						render();
+					}, {class: 'hf-b-rule-logic', title: 'Vale para todas as regras desta condição'}),
+				select(rule.campo, fieldOpts, function (v) {
+					rule.campo = v;
+					rule.valores = [];
+					render();
+				}),
+				select(rule.operador, [['igual', 'for igual a'], ['diferente', 'for diferente de']], function (v) {
+					rule.operador = v;
+				}),
+				valuesEditor(rule),
+				button('✕', function () {
+					cond.regras.splice(k, 1);
+
+					if (!cond.regras.length) {
+						owner.quando = null;
+					}
+
+					render();
+				}, 'btn-alt hf-b-icon', 'Remover regra')
+			);
+		});
+
+		return h('div', {class: 'hf-b-cond hf-b-cond-rules'},
+			rows,
+			h('div', {class: 'hf-b-cond-foot'},
+				button('+ regra', function () {
+					cond.regras.push(newRule());
+					render();
+				}),
+				(cond.regras.length > 1)
+					? h('span', {class: 'hf-b-hint', text: cond.logica === 'ou'
+						? 'OU: basta uma regra ser verdadeira.'
+						: 'E: todas as regras precisam ser verdadeiras.'})
+					: h('span', {class: 'hf-b-hint', text: 'Marque vários valores para "qualquer um destes".'})
+			)
 		);
 	}
 
