@@ -21,7 +21,7 @@ $form = (new CForm('post', (new CUrl('zabbix.php'))->setArgument('action', 'host
 	->setName('hf_builder_form')
 	->addItem((new CVar(CSRF_TOKEN_NAME, CCsrfTokenHelper::get('hostflow.form.save')))->removeId())
 	->addItem((new CVar('original_id', $data['original_id']))->removeId())
-	->addItem((new CVar('definition', ''))->setId('hf-definition'));
+	->addItem(new CVar('definition', '', 'hf-definition'));
 
 $form->addItem(
 	(new CDiv((new CTag('noscript', true, 'O construtor de formulários precisa de JavaScript.'))))
