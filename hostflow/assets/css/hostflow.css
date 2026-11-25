@@ -1,0 +1,313 @@
+/* HostFlow: estilos do módulo. Cores neutras, com transparência, para funcionar em todos os temas do Zabbix. */
+
+.hf-intro {
+	margin: 0 0 12px;
+	opacity: .8;
+	max-width: 900px;
+}
+
+.hf-alert {
+	margin: 0 0 12px;
+	padding: 10px 14px;
+	border-left: 4px solid #0275b8;
+	background: rgba(2, 117, 184, .08);
+	border-radius: 2px;
+}
+
+.hf-alert ul {
+	margin: 6px 0 0 18px;
+	list-style: disc;
+}
+
+.hf-alert-bad {
+	border-left-color: #e45959;
+	background: rgba(228, 89, 89, .1);
+}
+
+.hf-alert-good {
+	border-left-color: #59db8f;
+	background: rgba(89, 219, 143, .12);
+}
+
+.hf-field-error {
+	color: #e45959;
+	margin-top: 4px;
+}
+
+.hf-hidden,
+.hf-waiting-host .hf-needs-host {
+	display: none !important;
+}
+
+.hf-loading {
+	opacity: .5;
+	pointer-events: none;
+}
+
+.hf-mono {
+	font-family: "DejaVu Sans Mono", Consolas, monospace;
+}
+
+.hf-pre-wrap {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.hf-old {
+	opacity: .7;
+}
+
+.hf-new {
+	font-weight: bold;
+}
+
+.hf-checklist {
+	max-height: 260px;
+	overflow: auto;
+	padding: 4px 0;
+}
+
+.hf-section-title {
+	margin: 18px 0 8px;
+	font-size: 14px;
+}
+
+.hf-details {
+	margin-top: 16px;
+}
+
+.hf-details summary {
+	cursor: pointer;
+}
+
+.hf-json {
+	max-height: 420px;
+	overflow: auto;
+	padding: 10px;
+	background: rgba(127, 127, 127, .08);
+	white-space: pre;
+}
+
+.hf-row-actions {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+.hf-inline-form {
+	display: inline;
+}
+
+.hf-builder-actions {
+	display: flex;
+	gap: 8px;
+	margin: 16px 0;
+}
+
+/* cartões de escolha de formulário */
+
+.hf-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: 10px;
+	max-width: 1200px;
+}
+
+.hf-card {
+	display: block;
+	padding: 12px 14px;
+	border: 1px solid rgba(127, 127, 127, .35);
+	border-left: 4px solid #0275b8;
+	border-radius: 2px;
+	text-decoration: none;
+}
+
+.hf-card:hover,
+.hf-card:focus {
+	background: rgba(127, 127, 127, .08);
+}
+
+.hf-card-update { border-left-color: #f0a14a; }
+.hf-card-move { border-left-color: #a07ae0; }
+.hf-card-delete { border-left-color: #e45959; }
+
+.hf-card-desc {
+	margin-top: 4px;
+	opacity: .75;
+}
+
+/* construtor */
+
+#hf-builder {
+	max-width: 1280px;
+}
+
+.hf-b-tabs {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 12px;
+}
+
+.hf-b-section {
+	margin: 0 0 18px;
+}
+
+.hf-b-section h4 {
+	font-size: 14px;
+	margin: 0 0 8px;
+}
+
+.hf-b-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 16px;
+	margin-bottom: 8px;
+	align-items: flex-end;
+}
+
+.hf-b-prop {
+	display: flex;
+	flex-direction: column;
+	min-width: 180px;
+}
+
+.hf-b-grow {
+	flex: 1 1 280px;
+}
+
+.hf-b-prop input[type="text"],
+.hf-b-prop select,
+.hf-b-prop textarea {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.hf-b-label {
+	font-weight: bold;
+	margin-bottom: 3px;
+}
+
+.hf-b-hint {
+	opacity: .7;
+	margin-top: 3px;
+	font-size: 11px;
+}
+
+.hf-b-muted {
+	opacity: .6;
+}
+
+.hf-b-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+	padding-bottom: 4px;
+}
+
+.hf-b-card {
+	border: 1px solid rgba(127, 127, 127, .35);
+	border-radius: 2px;
+	margin-bottom: 10px;
+}
+
+.hf-b-card-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 10px;
+	background: rgba(127, 127, 127, .08);
+	border-bottom: 1px solid rgba(127, 127, 127, .25);
+}
+
+.hf-b-card-num {
+	opacity: .6;
+	min-width: 28px;
+}
+
+.hf-b-spacer {
+	flex: 1;
+}
+
+.hf-b-card-body {
+	padding: 10px;
+}
+
+.hf-b-icon {
+	min-width: 28px;
+	padding: 0 6px;
+}
+
+.hf-b-danger {
+	color: #e45959;
+}
+
+.hf-b-tab-on {
+	pointer-events: none;
+}
+
+.hf-b-maps {
+	margin-top: 6px;
+}
+
+.hf-b-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 4px 0 6px;
+}
+
+.hf-b-table th {
+	text-align: left;
+	font-weight: bold;
+	padding: 4px 6px;
+	border-bottom: 1px solid rgba(127, 127, 127, .3);
+}
+
+.hf-b-table td {
+	padding: 4px 6px;
+	vertical-align: top;
+	border-bottom: 1px solid rgba(127, 127, 127, .15);
+}
+
+.hf-b-table input[type="text"],
+.hf-b-table select {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.hf-b-target,
+.hf-b-mode,
+.hf-b-cond {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.hf-b-target-base {
+	min-width: 220px;
+}
+
+.hf-b-target-name {
+	min-width: 140px;
+}
+
+.hf-b-json {
+	width: 100%;
+	min-height: 520px;
+	box-sizing: border-box;
+}
+
+.hf-b-help {
+	margin: 8px 0 0;
+	max-width: 900px;
+}
+
+.hf-b-help summary {
+	cursor: pointer;
+	font-weight: bold;
+}
+
+.hf-b-help ul {
+	margin: 6px 0 0 18px;
+	list-style: disc;
+}

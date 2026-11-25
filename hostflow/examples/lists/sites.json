@@ -1,0 +1,9 @@
+{
+    "id": "sites",
+    "nome": "Sites",
+    "itens": [
+        { "valor": "SITE_A", "rotulo": "Site A", "attrs": { "regiao": "NORTE", "cliente": "CLIENTE_A" } },
+        { "valor": "SITE_B", "rotulo": "Site B", "attrs": { "regiao": "NORTE", "cliente": "CLIENTE_B" } },
+        { "valor": "SITE_C", "rotulo": "Site C", "attrs": { "regiao": "SUL", "cliente": "CLIENTE_A" } }
+    ]
+}

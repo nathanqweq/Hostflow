@@ -1,0 +1,9 @@
+{
+    "id": "operadoras",
+    "nome": "Operadoras de link",
+    "itens": [
+        { "valor": "OPERADORA_A", "rotulo": "Operadora A", "attrs": {} },
+        { "valor": "OPERADORA_B", "rotulo": "Operadora B", "attrs": {} },
+        { "valor": "OPERADORA_C", "rotulo": "Operadora C", "attrs": {} }
+    ]
+}

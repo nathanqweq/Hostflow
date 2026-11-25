@@ -1,0 +1,107 @@
+{
+    "schema_version": 1,
+    "id": "novo-switch",
+    "versao": 1,
+    "nome": "Novo switch",
+    "descricao": "Exemplo: cadastro de switch de acesso ou core. Grupo e tags são montados a partir do site.",
+    "tipo": "create",
+    "ativo": true,
+    "equipe_responsavel": "Equipe de redes",
+    "campos": [
+        {
+            "id": "site",
+            "rotulo": "Site",
+            "tipo": "select",
+            "obrigatorio": true,
+            "ajuda": "",
+            "valor_padrao": "",
+            "lista": "sites",
+            "opcoes": [],
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "groups[]", "padrao": "Sites/{site.regiao}/{site}/{funcao}", "modo": "adicionar" },
+                { "alvo": "tag:site", "padrao": "" },
+                { "alvo": "tag:cliente", "padrao": "{site.cliente}" }
+            ]
+        },
+        {
+            "id": "funcao",
+            "rotulo": "Função",
+            "tipo": "select",
+            "obrigatorio": true,
+            "ajuda": "",
+            "valor_padrao": "Switches",
+            "lista": "",
+            "opcoes": [
+                { "valor": "Switches", "rotulo": "Switch de acesso" },
+                { "valor": "Switches/Core", "rotulo": "Switch core" }
+            ],
+            "quando": null,
+            "mapeamento": []
+        },
+        {
+            "id": "hostname",
+            "rotulo": "Hostname",
+            "tipo": "text",
+            "obrigatorio": true,
+            "ajuda": "Padrão SW-<SITE>-<NN>, em maiúsculas.",
+            "valor_padrao": "",
+            "regex": "^SW-[A-Z0-9_]+-[0-9]{2}$",
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "host.host", "padrao": "" },
+                { "alvo": "host.name", "padrao": "" }
+            ]
+        },
+        {
+            "id": "ip",
+            "rotulo": "IP de gerência",
+            "tipo": "ip",
+            "obrigatorio": true,
+            "ajuda": "",
+            "valor_padrao": "",
+            "regex": "",
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "interface.ip", "padrao": "" }
+            ]
+        },
+        {
+            "id": "proxy",
+            "rotulo": "Proxy",
+            "tipo": "zbx_proxy",
+            "obrigatorio": true,
+            "ajuda": "",
+            "valor_padrao": "",
+            "permitidos": ["proxy-01", "proxy-02"],
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "proxy", "padrao": "" }
+            ]
+        },
+        {
+            "id": "observacoes",
+            "rotulo": "Observações",
+            "tipo": "textarea",
+            "obrigatorio": false,
+            "ajuda": "Modelo, rack, posição etc.",
+            "valor_padrao": "",
+            "regex": "",
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "host.description", "padrao": "" }
+            ]
+        }
+    ],
+    "valores_fixos": [
+        { "alvo": "interface.type", "valor": "snmp", "quando": null },
+        { "alvo": "interface.port", "valor": "161", "quando": null },
+        { "alvo": "interface.useip", "valor": "1", "quando": null },
+        { "alvo": "interface.snmp.version", "valor": "2", "quando": null },
+        { "alvo": "interface.snmp.community", "valor": "{$SNMP_COMMUNITY}", "quando": null },
+        { "alvo": "templates[]", "valor": "Network Generic Device by SNMP", "modo": "vincular", "quando": null },
+        { "alvo": "tag:categoria", "valor": "REDE", "quando": null },
+        { "alvo": "tag:funcao", "valor": "ACESSO", "quando": { "campo": "funcao", "igual": "Switches" } },
+        { "alvo": "tag:funcao", "valor": "CORE", "quando": { "campo": "funcao", "igual": "Switches/Core" } }
+    ]
+}

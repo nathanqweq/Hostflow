@@ -1,0 +1,55 @@
+{
+    "schema_version": 1,
+    "id": "desativar-excluir-host",
+    "versao": 1,
+    "nome": "Desativar/excluir host",
+    "descricao": "Exemplo: desativa (mantém histórico) ou exclui um host existente.",
+    "tipo": "delete",
+    "ativo": true,
+    "equipe_responsavel": "Equipe de monitoramento",
+    "campos": [
+        {
+            "id": "host",
+            "rotulo": "Host",
+            "tipo": "zbx_host",
+            "obrigatorio": true,
+            "ajuda": "Só aparecem hosts que você tem permissão de ler.",
+            "valor_padrao": "",
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "hostid", "padrao": "" }
+            ]
+        },
+        {
+            "id": "operacao",
+            "rotulo": "Operação",
+            "tipo": "select",
+            "obrigatorio": true,
+            "ajuda": "Desativar mantém o histórico; excluir apaga o host e todos os dados.",
+            "valor_padrao": "desativar",
+            "lista": "",
+            "opcoes": [
+                { "valor": "desativar", "rotulo": "Desativar (recomendado)" },
+                { "valor": "excluir", "rotulo": "Excluir definitivamente" }
+            ],
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "operacao", "padrao": "" }
+            ]
+        },
+        {
+            "id": "confirmo_exclusao",
+            "rotulo": "Confirmo que o histórico será perdido",
+            "tipo": "checkbox",
+            "obrigatorio": true,
+            "ajuda": "",
+            "valor_padrao": "",
+            "quando": { "campo": "operacao", "igual": "excluir" },
+            "mapeamento": []
+        }
+    ],
+    "valores_fixos": [
+        { "alvo": "groups[]", "valor": "Desativados", "modo": "adicionar", "quando": { "campo": "operacao", "igual": "desativar" } },
+        { "alvo": "tag:status", "valor": "desativado", "quando": { "campo": "operacao", "igual": "desativar" } }
+    ]
+}

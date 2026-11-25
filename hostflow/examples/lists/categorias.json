@@ -1,0 +1,10 @@
+{
+    "id": "categorias",
+    "nome": "Categorias de host",
+    "itens": [
+        { "valor": "SERVIDOR", "rotulo": "Servidor", "attrs": {} },
+        { "valor": "REDE", "rotulo": "Equipamento de rede", "attrs": {} },
+        { "valor": "LINK", "rotulo": "Link de internet", "attrs": {} },
+        { "valor": "URL", "rotulo": "URL / serviço web", "attrs": {} }
+    ]
+}

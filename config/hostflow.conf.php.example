@@ -1,0 +1,14 @@
+<?php
+/*
+ * HostFlow: configuração. Copie para /etc/zabbix/hostflow.conf.php (fora do webroot).
+ * Permissões sugeridas: root:<grupo do servidor web> 0640.
+ */
+return [
+	// Onde ficam os formulários (forms/*.json) e as listas (lists/*.json).
+	// O servidor web (apache/nginx via php-fpm) precisa de leitura e escrita aqui.
+	'data_dir' => '/var/lib/zabbix-hostflow',
+
+	// O que acontece depois de um envio válido. null = nada é enviado (MVP).
+	// Classe que implementa Modules\HostFlow\Lib\Submit\SubmitHandler (ex.: integração com o sistema de chamados).
+	'submit_handler' => null
+];

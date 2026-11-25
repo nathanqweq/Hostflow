@@ -1,0 +1,104 @@
+{
+    "schema_version": 1,
+    "id": "novo-link-internet",
+    "versao": 1,
+    "nome": "Novo link de internet",
+    "descricao": "Exemplo: link de internet. Proxy, template de ping e categoria são aplicados automaticamente.",
+    "tipo": "create",
+    "ativo": true,
+    "equipe_responsavel": "Equipe de links",
+    "campos": [
+        {
+            "id": "site",
+            "rotulo": "Site",
+            "tipo": "select",
+            "obrigatorio": true,
+            "ajuda": "",
+            "valor_padrao": "",
+            "lista": "sites",
+            "opcoes": [],
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "groups[]", "padrao": "Sites/{site.regiao}/{site}/Links", "modo": "adicionar" },
+                { "alvo": "tag:site", "padrao": "" },
+                { "alvo": "tag:cliente", "padrao": "{site.cliente}" }
+            ]
+        },
+        {
+            "id": "operadora",
+            "rotulo": "Operadora",
+            "tipo": "select",
+            "obrigatorio": true,
+            "ajuda": "",
+            "valor_padrao": "",
+            "lista": "operadoras",
+            "opcoes": [],
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "host.host", "padrao": "LINK-{site}-{operadora}" },
+                { "alvo": "tag:operadora", "padrao": "" }
+            ]
+        },
+        {
+            "id": "nome_visivel",
+            "rotulo": "Nome visível",
+            "tipo": "text",
+            "obrigatorio": true,
+            "ajuda": "Ex.: Link Operadora A - Site A",
+            "valor_padrao": "",
+            "regex": "",
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "host.name", "padrao": "" }
+            ]
+        },
+        {
+            "id": "ip",
+            "rotulo": "IP público monitorado",
+            "tipo": "ip",
+            "obrigatorio": true,
+            "ajuda": "",
+            "valor_padrao": "",
+            "regex": "",
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "interface.ip", "padrao": "" }
+            ]
+        },
+        {
+            "id": "circuito",
+            "rotulo": "Designação do circuito",
+            "tipo": "text",
+            "obrigatorio": true,
+            "ajuda": "Código do circuito na operadora.",
+            "valor_padrao": "",
+            "regex": "^[A-Za-z0-9/_.-]{3,64}$",
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "macro:{$LINK.CIRCUITO}", "padrao": "" },
+                { "alvo": "inventory.serialno_a", "padrao": "" }
+            ]
+        },
+        {
+            "id": "banda",
+            "rotulo": "Banda contratada (Mbps)",
+            "tipo": "text",
+            "obrigatorio": false,
+            "ajuda": "Somente números.",
+            "valor_padrao": "",
+            "regex": "^[0-9]{1,6}$",
+            "quando": null,
+            "mapeamento": [
+                { "alvo": "macro:{$LINK.BANDA}", "padrao": "" }
+            ]
+        }
+    ],
+    "valores_fixos": [
+        { "alvo": "interface.type", "valor": "agent", "quando": null },
+        { "alvo": "interface.port", "valor": "10050", "quando": null },
+        { "alvo": "interface.useip", "valor": "1", "quando": null },
+        { "alvo": "proxy", "valor": "proxy-links", "quando": null },
+        { "alvo": "templates[]", "valor": "ICMP Ping", "modo": "vincular", "quando": null },
+        { "alvo": "tag:categoria", "valor": "LINK", "quando": null }
+    ]
+}

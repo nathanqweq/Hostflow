@@ -1,0 +1,53 @@
+{
+	"manifest_version": 2.0,
+	"id": "hostflow",
+	"name": "HostFlow - Solicitações de hosts",
+	"namespace": "HostFlow",
+	"version": "0.1.0",
+	"author": "HostFlow",
+	"description": "Formulários padronizados para solicitar criação, alteração, movimentação e exclusão de hosts.",
+	"actions": {
+		"hostflow.form.list": {
+			"class": "FormList",
+			"view": "hostflow.form.list"
+		},
+		"hostflow.form.edit": {
+			"class": "FormEdit",
+			"view": "hostflow.form.edit"
+		},
+		"hostflow.form.save": {
+			"class": "FormSave",
+			"view": "hostflow.form.edit"
+		},
+		"hostflow.form.delete": {
+			"class": "FormDelete"
+		},
+		"hostflow.list.list": {
+			"class": "ListList",
+			"view": "hostflow.list.list"
+		},
+		"hostflow.list.edit": {
+			"class": "ListEdit",
+			"view": "hostflow.list.edit"
+		},
+		"hostflow.list.save": {
+			"class": "ListSave",
+			"view": "hostflow.list.edit"
+		},
+		"hostflow.list.delete": {
+			"class": "ListDelete"
+		},
+		"hostflow.request.new": {
+			"class": "RequestNew",
+			"view": "hostflow.request.new"
+		},
+		"hostflow.request.submit": {
+			"class": "RequestSubmit",
+			"view": "hostflow.request.new"
+		}
+	},
+	"assets": {
+		"css": ["hostflow.css"],
+		"js": ["hostflow.common.js", "hostflow.builder.js", "hostflow.request.js"]
+	}
+}
