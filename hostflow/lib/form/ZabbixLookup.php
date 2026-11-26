@@ -121,24 +121,6 @@ final class ZabbixLookup {
 		return is_array($rows) ? $rows : [];
 	}
 
-	/**
-	 * Hosts que já têm interface com esse IP (entre os que o usuário enxerga).
-	 */
-	public static function hostsWithIp(string $ip): array {
-		$interfaces = API::HostInterface()->get(['output' => ['hostid'], 'filter' => ['ip' => $ip]]);
-
-		if (!$interfaces) {
-			return [];
-		}
-
-		$rows = API::Host()->get([
-			'output' => ['hostid', 'host', 'name'],
-			'hostids' => array_unique(array_column($interfaces, 'hostid'))
-		]);
-
-		return is_array($rows) ? $rows : [];
-	}
-
 	private static function missing(array $names, callable $fetch): array {
 		$names = array_values(array_filter($names, 'strlen'));
 

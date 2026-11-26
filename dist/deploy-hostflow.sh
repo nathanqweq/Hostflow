@@ -4409,17 +4409,8 @@ final class Submission {
 			}
 		}
 
-		$ip = $payload['interface']['ip'] ?? null;
-
-		if ($ip !== null && $type === 'create') {
-			$others = ZabbixLookup::hostsWithIp($ip);
-
-			if ($others) {
-				$this->errors[] = sprintf('O IP %s já está em uso por: %s.', $ip,
-					implode(', ', array_column($others, 'name'))
-				);
-			}
-		}
+		// IP repetido é permitido: vários hosts podem compartilhar o mesmo IP (ex.: hosts lógicos no mesmo
+		// equipamento). Só os nomes técnico e visível precisam ser únicos, como no próprio Zabbix.
 
 		$groups = $payload['groups']['adicionar'] ?? [];
 
@@ -4725,24 +4716,6 @@ final class ZabbixLookup {
 
 	public static function hostsByVisibleName(string $name): array {
 		$rows = API::Host()->get(['output' => ['hostid', 'host', 'name'], 'filter' => ['name' => $name]]);
-
-		return is_array($rows) ? $rows : [];
-	}
-
-	/**
-	 * Hosts que já têm interface com esse IP (entre os que o usuário enxerga).
-	 */
-	public static function hostsWithIp(string $ip): array {
-		$interfaces = API::HostInterface()->get(['output' => ['hostid'], 'filter' => ['ip' => $ip]]);
-
-		if (!$interfaces) {
-			return [];
-		}
-
-		$rows = API::Host()->get([
-			'output' => ['hostid', 'host', 'name'],
-			'hostids' => array_unique(array_column($interfaces, 'hostid'))
-		]);
 
 		return is_array($rows) ? $rows : [];
 	}
@@ -5321,7 +5294,10 @@ final class TopdeskSettings {
 		'grupo_operador' => ['Grupo de operadores (oper_group)', 'operatorGroup', ''],
 		'operador' => ['Operador (ID)', 'operator', ''],
 		'sla' => ['SLA (ID)', 'sla', ''],
-		'contrato' => ['Contrato (ID)', 'contract', 'Se o TOPdesk recusar o campo "contract", deixe vazio.']
+		'contrato' => ['Contrato (ID)', 'contract', 'Se o TOPdesk recusar o campo "contract", deixe vazio.'],
+		'status' => ['Status de processamento (processingStatus)', 'processingStatus',
+			'Status com que o chamado é aberto.'
+		]
 	];
 
 	public static function defaults(): array {
@@ -5340,6 +5316,8 @@ final class TopdeskSettings {
 		foreach (array_keys(self::LOOKUPS) as $key) {
 			$defaults[$key] = '';
 		}
+
+		$defaults['status'] = 'Registrado';
 
 		return $defaults;
 	}

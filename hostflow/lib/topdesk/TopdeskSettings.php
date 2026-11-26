@@ -30,7 +30,10 @@ final class TopdeskSettings {
 		'grupo_operador' => ['Grupo de operadores (oper_group)', 'operatorGroup', ''],
 		'operador' => ['Operador (ID)', 'operator', ''],
 		'sla' => ['SLA (ID)', 'sla', ''],
-		'contrato' => ['Contrato (ID)', 'contract', 'Se o TOPdesk recusar o campo "contract", deixe vazio.']
+		'contrato' => ['Contrato (ID)', 'contract', 'Se o TOPdesk recusar o campo "contract", deixe vazio.'],
+		'status' => ['Status de processamento (processingStatus)', 'processingStatus',
+			'Status com que o chamado é aberto.'
+		]
 	];
 
 	public static function defaults(): array {
@@ -49,6 +52,8 @@ final class TopdeskSettings {
 		foreach (array_keys(self::LOOKUPS) as $key) {
 			$defaults[$key] = '';
 		}
+
+		$defaults['status'] = 'Registrado';
 
 		return $defaults;
 	}

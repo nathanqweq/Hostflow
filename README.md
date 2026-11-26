@@ -132,7 +132,7 @@ semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/zabbix-hostflow(/.*)?' 
    - envie vazio: a página volta com os erros por campo;
    - use o IP `999.1.1.1`: aparece "IP inválido";
    - use o hostname `sw-x`: o envio falha na regex;
-   - use um hostname ou IP que já existe: o envio é recusado;
+   - use um hostname que já existe: o envio é recusado. IP repetido é aceito;
    - use um site cujo grupo `Sites/<regiao>/<site>/Switches` não existe: aparece "Grupo inexistente".
 
    Um envio válido mostra o resumo, o host a ser criado (grupo e tags `site`, `cliente`, `categoria`, `funcao`) e o payload JSON.
@@ -196,7 +196,7 @@ Em *Solicitações › Integração TOPdesk* (só para Super admin), configure:
 
 - endereço, usuário e **application password** da API;
 - o **cliente**;
-- a classificação do chamado: tipo, categoria, subcategoria, impacto, urgência, prioridade, grupo de operadores, operador, SLA e contrato.
+- a classificação do chamado: tipo, categoria, subcategoria, impacto, urgência, prioridade, grupo de operadores, operador, SLA, contrato e status de processamento (padrão: `Registrado`).
 
 Cada campo de classificação aceita o ID (UUID) ou o nome exato cadastrado no TOPdesk. O botão **Salvar e testar conexão** consulta `/tas/api/version` e `/tas/api/incidents/call_types`. A configuração fica em `<data_dir>/settings/topdesk.json` (0660). A senha nunca é devolvida ao navegador: deixar o campo vazio mantém a senha gravada.
 
@@ -217,7 +217,7 @@ O que cada envio válido gera (`POST /tas/api/incidents`):
 
 ## Limitações conhecidas desta versão
 
-- As checagens de duplicidade (hostname, IP) e de existência de grupos rodam com a **sessão de quem envia**. Por isso só enxergam o que esse usuário pode ler. A revalidação completa cabe à etapa de execução.
+- As checagens de duplicidade (nome técnico e nome visível) e de existência de grupos rodam com a **sessão de quem envia**. Por isso só enxergam o que esse usuário pode ler. A revalidação completa cabe à etapa de execução.
 - Defina `permitidos` para templates e proxies. Usuários do tipo *User* normalmente não leem templates, então `grupo_templates` pode aparecer vazio para eles.
 - Segredos digitados no formulário (community e passphrases SNMP) aparecem no payload da tela de confirmação. Prefira macros (`{$SNMP_COMMUNITY}`) nos valores fixos, e não mande segredos ao sistema de chamados.
 - O pré-preenchimento extrai o valor de um padrão por regex. Quando o host atual não segue o padrão, o campo vem vazio.

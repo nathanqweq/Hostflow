@@ -137,17 +137,8 @@ final class Submission {
 			}
 		}
 
-		$ip = $payload['interface']['ip'] ?? null;
-
-		if ($ip !== null && $type === 'create') {
-			$others = ZabbixLookup::hostsWithIp($ip);
-
-			if ($others) {
-				$this->errors[] = sprintf('O IP %s já está em uso por: %s.', $ip,
-					implode(', ', array_column($others, 'name'))
-				);
-			}
-		}
+		// IP repetido é permitido: vários hosts podem compartilhar o mesmo IP (ex.: hosts lógicos no mesmo
+		// equipamento). Só os nomes técnico e visível precisam ser únicos, como no próprio Zabbix.
 
 		$groups = $payload['groups']['adicionar'] ?? [];
 
