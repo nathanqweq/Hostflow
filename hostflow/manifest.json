@@ -44,6 +44,14 @@
 		"hostflow.request.submit": {
 			"class": "RequestSubmit",
 			"view": "hostflow.request.new"
+		},
+		"hostflow.topdesk.edit": {
+			"class": "TopdeskEdit",
+			"view": "hostflow.topdesk.edit"
+		},
+		"hostflow.topdesk.save": {
+			"class": "TopdeskSave",
+			"view": "hostflow.topdesk.edit"
 		}
 	},
 	"assets": {

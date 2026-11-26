@@ -202,7 +202,7 @@ fi
 
 info "Preparando o diretório de dados..."
 
-for dir in "$DATA_DIR" "$DATA_DIR/forms" "$DATA_DIR/lists"; do
+for dir in "$DATA_DIR" "$DATA_DIR/forms" "$DATA_DIR/lists" "$DATA_DIR/settings"; do
 	if [ -d "$dir" ]; then
 		chown root:"$WEB_GROUP" "$dir"
 		chmod 2770 "$dir"

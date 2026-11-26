@@ -28,6 +28,9 @@ class Module extends CModule {
 			$items[] = (new CMenuItem(_('Listas de valores')))
 				->setAction('hostflow.list.list')
 				->setAliases(['hostflow.list.edit', 'hostflow.list.save']);
+			$items[] = (new CMenuItem(_('Integração TOPdesk')))
+				->setAction('hostflow.topdesk.edit')
+				->setAliases(['hostflow.topdesk.save']);
 		}
 
 		APP::Component()->get('menu.main')->add(

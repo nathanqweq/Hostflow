@@ -21,6 +21,7 @@ mkdir -p "$MOD/lib"
 mkdir -p "$MOD/lib/form"
 mkdir -p "$MOD/lib/storage"
 mkdir -p "$MOD/lib/submit"
+mkdir -p "$MOD/lib/topdesk"
 mkdir -p "$MOD/views"
 
 # ---- Module.php
@@ -55,6 +56,9 @@ class Module extends CModule {
 			$items[] = (new CMenuItem(_('Listas de valores')))
 				->setAction('hostflow.list.list')
 				->setAliases(['hostflow.list.edit', 'hostflow.list.save']);
+			$items[] = (new CMenuItem(_('Integração TOPdesk')))
+				->setAction('hostflow.topdesk.edit')
+				->setAliases(['hostflow.topdesk.save']);
 		}
 
 		APP::Component()->get('menu.main')->add(
@@ -786,6 +790,7 @@ cat > "$MOD/actions/RequestSubmit.php" <<'HOSTFLOW_EOF'
 
 namespace Modules\HostFlow\Actions;
 
+use API;
 use CControllerResponseData;
 use CControllerResponseFatal;
 use CWebUser;
@@ -795,6 +800,8 @@ use Modules\HostFlow\Lib\Form\Options;
 use Modules\HostFlow\Lib\Form\Submission;
 use Modules\HostFlow\Lib\Submit\NullSubmitHandler;
 use Modules\HostFlow\Lib\Submit\SubmitHandler;
+use Modules\HostFlow\Lib\Submit\TopdeskSubmitHandler;
+use Modules\HostFlow\Lib\Topdesk\TopdeskSettings;
 use Throwable;
 
 class RequestSubmit extends BaseAction {
@@ -889,7 +896,8 @@ class RequestSubmit extends BaseAction {
 				'userid' => CWebUser::$data['userid'] ?? null,
 				'username' => CWebUser::$data['username'] ?? null,
 				'name' => CWebUser::$data['name'] ?? '',
-				'surname' => CWebUser::$data['surname'] ?? ''
+				'surname' => CWebUser::$data['surname'] ?? '',
+				'email' => self::requesterEmail()
 			],
 			'enviado_em' => time()
 		];
@@ -911,6 +919,9 @@ class RequestSubmit extends BaseAction {
 		$this->setResponse($response);
 	}
 
+	/**
+	 * Ordem: classe explícita em submit_handler (hostflow.conf.php) > TOPdesk ativo na interface > nada.
+	 */
 	private static function handler(): SubmitHandler {
 		$class = Config::get('submit_handler');
 
@@ -919,7 +930,44 @@ class RequestSubmit extends BaseAction {
 			return new $class();
 		}
 
+		if (TopdeskSettings::isActive()) {
+			return new TopdeskSubmitHandler();
+		}
+
 		return new NullSubmitHandler();
+	}
+
+	/**
+	 * E-mail do usuário logado: primeira mídia com "@" (todo usuário pode ler o próprio cadastro);
+	 * se não houver, o username quando ele já é um e-mail.
+	 */
+	private static function requesterEmail(): string {
+		try {
+			$users = API::User()->get([
+				'output' => ['userid'],
+				'selectMedias' => ['sendto'],
+				'userids' => [CWebUser::$data['userid'] ?? 0]
+			]);
+		}
+		catch (Throwable $e) {
+			$users = [];
+		}
+
+		$medias = (is_array($users) && $users) ? ($users[0]['medias'] ?? []) : [];
+
+		foreach ($medias as $media) {
+			foreach ((array) ($media['sendto'] ?? []) as $sendto) {
+				$sendto = trim((string) $sendto);
+
+				if (filter_var($sendto, FILTER_VALIDATE_EMAIL)) {
+					return $sendto;
+				}
+			}
+		}
+
+		$username = (string) (CWebUser::$data['username'] ?? '');
+
+		return filter_var($username, FILTER_VALIDATE_EMAIL) ? $username : '';
 	}
 
 	/**
@@ -966,6 +1014,160 @@ class RequestSubmit extends BaseAction {
 		}
 
 		return $rows;
+	}
+}
+HOSTFLOW_EOF
+
+# ---- actions/TopdeskEdit.php
+cat > "$MOD/actions/TopdeskEdit.php" <<'HOSTFLOW_EOF'
+<?php declare(strict_types = 0);
+
+namespace Modules\HostFlow\Actions;
+
+use CControllerResponseData;
+use Modules\HostFlow\Lib\Topdesk\TopdeskSettings;
+
+class TopdeskEdit extends BaseAction {
+
+	protected function init(): void {
+		$this->disableCsrfValidation();
+	}
+
+	protected function checkInput(): bool {
+		return true;
+	}
+
+	protected function checkPermissions(): bool {
+		return $this->isSuperAdmin();
+	}
+
+	protected function doAction(): void {
+		$this->setResponse(self::response(TopdeskSettings::load(), [], null));
+	}
+
+	/**
+	 * A senha nunca vai para a view: só o indicador de que existe uma gravada.
+	 */
+	public static function response(array $settings, array $errors, ?array $test): CControllerResponseData {
+		$has_password = ($settings['senha'] !== '');
+		$settings['senha'] = '';
+
+		$response = new CControllerResponseData([
+			'settings' => $settings,
+			'has_password' => $has_password,
+			'errors' => $errors,
+			'test' => $test,
+			'writable' => TopdeskSettings::isWritable()
+		]);
+		$response->setTitle(_('Integração TOPdesk'));
+
+		return $response;
+	}
+}
+HOSTFLOW_EOF
+
+# ---- actions/TopdeskSave.php
+cat > "$MOD/actions/TopdeskSave.php" <<'HOSTFLOW_EOF'
+<?php declare(strict_types = 0);
+
+namespace Modules\HostFlow\Actions;
+
+use CControllerResponseFatal;
+use Modules\HostFlow\Lib\Topdesk\TopdeskClient;
+use Modules\HostFlow\Lib\Topdesk\TopdeskSettings;
+use Throwable;
+
+class TopdeskSave extends BaseAction {
+
+	protected function checkInput(): bool {
+		$rules = [
+			'ativo' => 'in 0,1',
+			'url' => 'string',
+			'usuario' => 'string',
+			'senha' => 'string',
+			'limpar_senha' => 'in 0,1',
+			'cliente' => 'string',
+			'solicitante_padrao' => 'string',
+			'verificar_ssl' => 'in 0,1',
+			'enviar_segredos' => 'in 0,1',
+			'campos_extras' => 'string',
+			'testar' => 'string'
+		];
+
+		foreach (array_keys(TopdeskSettings::LOOKUPS) as $key) {
+			$rules[$key] = 'string';
+		}
+
+		$ret = $this->validateInput($rules);
+
+		if (!$ret) {
+			$this->setResponse(new CControllerResponseFatal());
+		}
+
+		return $ret;
+	}
+
+	protected function checkPermissions(): bool {
+		return $this->isSuperAdmin();
+	}
+
+	protected function doAction(): void {
+		$current = TopdeskSettings::load();
+		$s = TopdeskSettings::defaults();
+
+		foreach (array_keys($s) as $key) {
+			if (is_bool($s[$key])) {
+				$s[$key] = ($this->getInput($key, '0') === '1');
+			}
+			else {
+				$s[$key] = trim($this->getInput($key, ''));
+			}
+		}
+
+		$s['url'] = rtrim($s['url'], '/');
+
+		// Senha vazia = manter a gravada.
+		if ($this->getInput('limpar_senha', '0') === '1') {
+			$s['senha'] = '';
+		}
+		elseif ($s['senha'] === '') {
+			$s['senha'] = $current['senha'];
+		}
+
+		$errors = TopdeskSettings::validate($s);
+
+		if (!$errors) {
+			try {
+				TopdeskSettings::save($s);
+			}
+			catch (Throwable $e) {
+				$errors[] = $e->getMessage();
+			}
+		}
+
+		if ($errors || !$this->hasInput('testar')) {
+			if (!$errors) {
+				$this->redirectTo('hostflow.topdesk.edit', $s['ativo']
+					? 'Configuração salva. Novas solicitações abrirão chamado no TOPdesk.'
+					: 'Configuração salva. A integração está desativada.'
+				);
+
+				return;
+			}
+
+			$this->setResponse(TopdeskEdit::response($s, $errors, null));
+
+			return;
+		}
+
+		try {
+			$test = ['ok' => true, 'mensagem' => 'Configuração salva. '.TopdeskClient::fromSettings($s)->test()];
+		}
+		catch (Throwable $e) {
+			$test = ['ok' => false, 'mensagem' => 'Configuração salva, mas o teste falhou: '.$e->getMessage()];
+		}
+
+		$this->setResponse(TopdeskEdit::response($s, [], $test));
 	}
 }
 HOSTFLOW_EOF
@@ -4757,6 +4959,616 @@ interface SubmitHandler {
 }
 HOSTFLOW_EOF
 
+# ---- lib/submit/TopdeskSubmitHandler.php
+cat > "$MOD/lib/submit/TopdeskSubmitHandler.php" <<'HOSTFLOW_EOF'
+<?php declare(strict_types = 0);
+
+namespace Modules\HostFlow\Lib\Submit;
+
+use Modules\HostFlow\Lib\Topdesk\TopdeskClient;
+use Modules\HostFlow\Lib\Topdesk\TopdeskSettings;
+use Modules\HostFlow\Lib\Topdesk\ZabbixExport;
+use RuntimeException;
+use Throwable;
+
+/**
+ * Abre um chamado no TOPdesk para cada envio válido:
+ *  - título "[CLIENTE] - Nova solicitação - <formulário>";
+ *  - solicitante = e-mail do usuário do Zabbix que preencheu (ou o solicitante padrão da configuração);
+ *  - classificação (tipo, categoria, impacto, urgência, prioridade, grupo/operador, SLA, contrato) da configuração;
+ *  - ação oculta para o solicitante com o JSON da solicitação;
+ *  - em formulários de criação, anexo oculto com o arquivo de importação do host no Zabbix.
+ *
+ * Ativado em "Solicitações › Integração TOPdesk".
+ */
+final class TopdeskSubmitHandler implements SubmitHandler {
+
+	private const BRIEF_MAX = 80; // limite do TOPdesk para briefDescription
+	private const SECRET_SNMP_KEYS = ['community', 'authpassphrase', 'privpassphrase'];
+
+	public function handle(array $submission): array {
+		$s = TopdeskSettings::load();
+		$form = $submission['formulario'];
+		$requester = $submission['solicitante'];
+
+		$email = trim((string) ($requester['email'] ?? ''));
+		$email = ($email !== '') ? $email : trim($s['solicitante_padrao']);
+
+		if ($email === '') {
+			return self::fail('Seu usuário do Zabbix não tem e-mail cadastrado (Perfil › Mídias) e não há solicitante '.
+				'padrão na configuração do TOPdesk. A solicitação não foi enviada.'
+			);
+		}
+
+		$title = sprintf('[%s] - Nova solicitação - %s', $s['cliente'], $form['nome']);
+		$with_secrets = !empty($s['enviar_segredos']);
+		$payload = $with_secrets ? $submission['payload'] : self::maskPayload($submission['payload']);
+
+		$body = [
+			'briefDescription' => mb_substr($title, 0, self::BRIEF_MAX),
+			'request' => self::requestText($title, $submission),
+			'callerLookup' => ['email' => $email],
+			'action' => self::actionText($submission, $payload, $email),
+			'actionInvisibleForCaller' => true
+		];
+
+		foreach (TopdeskSettings::LOOKUPS as $key => [, $api_key]) {
+			if (trim((string) $s[$key]) !== '') {
+				$body[$api_key] = TopdeskSettings::reference($s[$key]);
+			}
+		}
+
+		if (trim($s['campos_extras']) !== '') {
+			$body = array_replace_recursive($body, (array) json_decode($s['campos_extras'], true));
+		}
+
+		$client = TopdeskClient::fromSettings($s);
+
+		try {
+			$incident = $client->createIncident($body);
+		}
+		catch (RuntimeException $e) {
+			// E-mail sem cadastro de pessoa no TOPdesk: registra como solicitante não cadastrado.
+			if (stripos($e->getMessage(), 'caller') === false) {
+				throw $e;
+			}
+
+			unset($body['callerLookup']);
+			$body['caller'] = ['dynamicName' => self::requesterName($requester, $email), 'email' => $email];
+			$incident = $client->createIncident($body);
+		}
+
+		$number = (string) ($incident['number'] ?? '');
+		$id = (string) ($incident['id'] ?? '');
+		$message = 'Chamado aberto no TOPdesk.';
+
+		if ($id !== '' && ($form['tipo'] ?? '') === 'create') {
+			$host = (string) ($submission['payload']['host']['host'] ?? 'host');
+			$file = 'zabbix-import-'.preg_replace('/[^A-Za-z0-9._-]+/', '_', $host).'.json';
+			$json = json_encode(ZabbixExport::build($submission['payload'], $with_secrets),
+				JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+			);
+
+			try {
+				$client->addAttachment($id, $file, $json."\n", 'application/json', true,
+					'Importar em Data collection › Hosts › Import'
+				);
+				$message .= ' Arquivo de importação do Zabbix anexado.';
+			}
+			catch (Throwable $e) {
+				$message .= ' Atenção: não foi possível anexar o arquivo do Zabbix ('.$e->getMessage().').';
+			}
+		}
+
+		return ['ok' => true, 'mensagem' => $message, 'referencia' => $number !== '' ? $number : $id];
+	}
+
+	private static function fail(string $message): array {
+		return ['ok' => false, 'mensagem' => $message, 'referencia' => null];
+	}
+
+	private static function requesterName(array $requester, string $email): string {
+		$name = trim(($requester['name'] ?? '').' '.($requester['surname'] ?? ''));
+
+		return $name !== '' ? $name : (string) ($requester['username'] ?? $email);
+	}
+
+	/**
+	 * Texto visível ao solicitante: título, dados informados e justificativa.
+	 */
+	private static function requestText(string $title, array $submission): string {
+		$lines = [$title, ''];
+
+		foreach ($submission['resumo'] as $row) {
+			$lines[] = $row['rotulo'].': '.$row['valor'];
+		}
+
+		$lines[] = '';
+		$lines[] = 'Justificativa:';
+		$lines[] = $submission['justificativa'];
+		$lines[] = '';
+		$lines[] = sprintf('Solicitado por %s via Zabbix HostFlow em %s.',
+			self::requesterName($submission['solicitante'], (string) ($submission['solicitante']['email'] ?? '')),
+			date('d/m/Y H:i', (int) $submission['enviado_em'])
+		);
+
+		return implode("\n", $lines);
+	}
+
+	/**
+	 * Ação oculta: JSON técnico da solicitação para a equipe que executa.
+	 */
+	private static function actionText(array $submission, array $payload, string $email): string {
+		$form = $submission['formulario'];
+		$data = [
+			'formulario' => ['id' => $form['id'], 'nome' => $form['nome'], 'tipo' => $form['tipo']],
+			'solicitante' => [
+				'username' => $submission['solicitante']['username'] ?? null,
+				'nome' => self::requesterName($submission['solicitante'], $email),
+				'email' => $email
+			],
+			'enviado_em' => date('c', (int) $submission['enviado_em']),
+			'valores' => array_column($submission['resumo'], 'valor', 'campo'),
+			'justificativa' => $submission['justificativa'],
+			'payload' => $payload,
+			'diff' => $submission['diff']
+		];
+
+		return "Solicitação HostFlow (JSON):\n\n"
+			.json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+	}
+
+	private static function maskPayload(array $payload): array {
+		foreach (self::SECRET_SNMP_KEYS as $key) {
+			$value = (string) ($payload['interface']['snmp'][$key] ?? '');
+
+			if ($value !== '' && strpos($value, '{$') !== 0) {
+				$payload['interface']['snmp'][$key] = ZabbixExport::SECRET_PLACEHOLDER;
+			}
+		}
+
+		return $payload;
+	}
+}
+HOSTFLOW_EOF
+
+# ---- lib/topdesk/TopdeskClient.php
+cat > "$MOD/lib/topdesk/TopdeskClient.php" <<'HOSTFLOW_EOF'
+<?php declare(strict_types = 0);
+
+namespace Modules\HostFlow\Lib\Topdesk;
+
+use RuntimeException;
+
+/**
+ * Cliente mínimo da API REST do TOPdesk (/tas/api), autenticado por usuário + application password.
+ */
+final class TopdeskClient {
+
+	private string $base;
+	private string $auth;
+	private bool $verify_ssl;
+
+	public function __construct(string $url, string $user, string $password, bool $verify_ssl = true) {
+		if (!function_exists('curl_init')) {
+			throw new RuntimeException('A extensão PHP "curl" não está instalada no servidor do frontend.');
+		}
+
+		$this->base = rtrim($url, '/');
+		$this->auth = $user.':'.$password;
+		$this->verify_ssl = $verify_ssl;
+	}
+
+	public static function fromSettings(array $s): self {
+		return new self($s['url'], $s['usuario'], $s['senha'], !empty($s['verificar_ssl']));
+	}
+
+	public function baseUrl(): string {
+		return $this->base;
+	}
+
+	/**
+	 * @return array  incidente criado (inclui "id" e "number")
+	 */
+	public function createIncident(array $body): array {
+		return $this->json('POST', '/tas/api/incidents', $body);
+	}
+
+	/**
+	 * Anexa um arquivo ao chamado. $invisible = oculto para o solicitante.
+	 */
+	public function addAttachment(string $incident_id, string $filename, string $content, string $mime,
+			bool $invisible, string $description = ''): array {
+		$query = http_build_query(['invisibleForCaller' => $invisible ? 'true' : 'false', 'description' => $description]);
+		$boundary = '----hostflow'.bin2hex(random_bytes(8));
+		$safe_name = str_replace(['"', "\r", "\n"], '_', $filename);
+
+		$body = '--'.$boundary."\r\n"
+			.'Content-Disposition: form-data; name="file"; filename="'.$safe_name.'"'."\r\n"
+			.'Content-Type: '.$mime."\r\n\r\n"
+			.$content."\r\n"
+			.'--'.$boundary."--\r\n";
+
+		return $this->request('POST', '/tas/api/incidents/id/'.rawurlencode($incident_id).'/attachments?'.$query,
+			$body, 'multipart/form-data; boundary='.$boundary
+		);
+	}
+
+	/**
+	 * Testa endereço e credenciais. Retorna a versão do TOPdesk e quantos tipos de chamado o usuário enxerga.
+	 */
+	public function test(): string {
+		$version = $this->json('GET', '/tas/api/version');
+		$call_types = $this->json('GET', '/tas/api/incidents/call_types');
+
+		return sprintf('Conectado ao TOPdesk %s. Tipos de chamado visíveis: %d.',
+			$version['version'] ?? '?', is_array($call_types) ? count($call_types) : 0
+		);
+	}
+
+	private function json(string $method, string $path, ?array $body = null): array {
+		$payload = ($body === null)
+			? null
+			: json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+		return $this->request($method, $path, $payload, 'application/json');
+	}
+
+	private function request(string $method, string $path, ?string $body, string $content_type): array {
+		$ch = curl_init($this->base.$path);
+		$headers = ['Accept: application/json'];
+
+		if ($body !== null) {
+			$headers[] = 'Content-Type: '.$content_type;
+		}
+
+		curl_setopt_array($ch, [
+			CURLOPT_CUSTOMREQUEST => $method,
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+			CURLOPT_USERPWD => $this->auth,
+			CURLOPT_HTTPHEADER => $headers,
+			CURLOPT_CONNECTTIMEOUT => 10,
+			CURLOPT_TIMEOUT => 30,
+			CURLOPT_SSL_VERIFYPEER => $this->verify_ssl,
+			CURLOPT_SSL_VERIFYHOST => $this->verify_ssl ? 2 : 0,
+			CURLOPT_FOLLOWLOCATION => false
+		]);
+
+		if ($body !== null) {
+			curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+		}
+
+		$raw = curl_exec($ch);
+		$status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+		$error = curl_error($ch);
+		curl_close($ch);
+
+		if ($raw === false) {
+			throw new RuntimeException('TOPdesk inacessível: '.$error);
+		}
+
+		$data = json_decode((string) $raw, true);
+
+		if ($status < 200 || $status >= 300) {
+			throw new RuntimeException(sprintf('TOPdesk respondeu HTTP %d em %s %s: %s', $status, $method,
+				strtok($path, '?'), self::errorText($status, $data, (string) $raw)
+			));
+		}
+
+		return is_array($data) ? $data : [];
+	}
+
+	/**
+	 * O TOPdesk devolve erros como [{"message": "..."}] ou {"errors": [...]}.
+	 */
+	private static function errorText(int $status, $data, string $raw): string {
+		if ($status === 401) {
+			return 'usuário ou application password inválidos.';
+		}
+
+		if ($status === 403) {
+			return 'o usuário da API não tem permissão para esta operação.';
+		}
+
+		$messages = [];
+
+		foreach ((array) (is_array($data) && isset($data['errors']) ? $data['errors'] : $data) as $item) {
+			if (is_array($item) && isset($item['message'])) {
+				$messages[] = $item['message'];
+			}
+			elseif (is_string($item)) {
+				$messages[] = $item;
+			}
+		}
+
+		return $messages ? implode(' | ', $messages) : mb_substr(trim(strip_tags($raw)), 0, 300);
+	}
+}
+HOSTFLOW_EOF
+
+# ---- lib/topdesk/TopdeskSettings.php
+cat > "$MOD/lib/topdesk/TopdeskSettings.php" <<'HOSTFLOW_EOF'
+<?php declare(strict_types = 0);
+
+namespace Modules\HostFlow\Lib\Topdesk;
+
+use Modules\HostFlow\Lib\Config;
+use Modules\HostFlow\Lib\Storage\JsonStore;
+
+/**
+ * Configuração da integração com o TOPdesk, editada em "Solicitações › Integração TOPdesk"
+ * e gravada em <data_dir>/settings/topdesk.json (fora do webroot, 0660).
+ *
+ * A senha (application password do TOPdesk) nunca volta para o navegador: o formulário só a substitui
+ * quando um valor novo é digitado.
+ */
+final class TopdeskSettings {
+
+	private const STORE_ID = 'topdesk';
+
+	/**
+	 * Campos de classificação do chamado: chave interna => [rótulo, chave no JSON do TOPdesk, dica].
+	 * O valor pode ser o ID (UUID) ou o nome exato cadastrado no TOPdesk.
+	 */
+	public const LOOKUPS = [
+		'tipo_chamado' => ['Tipo de chamado (call_type)', 'callType', ''],
+		'categoria' => ['Categoria (category)', 'category', ''],
+		'subcategoria' => ['Subcategoria (subcategory)', 'subcategory', ''],
+		'impacto' => ['Impacto (impact)', 'impact', ''],
+		'urgencia' => ['Urgência (urgency)', 'urgency', ''],
+		'prioridade' => ['Prioridade (priority)', 'priority', ''],
+		'grupo_operador' => ['Grupo de operadores (oper_group)', 'operatorGroup', ''],
+		'operador' => ['Operador (ID)', 'operator', ''],
+		'sla' => ['SLA (ID)', 'sla', ''],
+		'contrato' => ['Contrato (ID)', 'contract', 'Se o TOPdesk recusar o campo "contract", deixe vazio.']
+	];
+
+	public static function defaults(): array {
+		$defaults = [
+			'ativo' => false,
+			'url' => '',
+			'usuario' => '',
+			'senha' => '',
+			'cliente' => '',
+			'solicitante_padrao' => '',
+			'verificar_ssl' => true,
+			'enviar_segredos' => false,
+			'campos_extras' => ''
+		];
+
+		foreach (array_keys(self::LOOKUPS) as $key) {
+			$defaults[$key] = '';
+		}
+
+		return $defaults;
+	}
+
+	private static function store(): JsonStore {
+		return new JsonStore(Config::dataDir().'/settings');
+	}
+
+	public static function load(): array {
+		$saved = self::store()->get(self::STORE_ID) ?? [];
+
+		return array_replace(self::defaults(), array_intersect_key($saved, self::defaults()));
+	}
+
+	public static function save(array $settings): void {
+		self::store()->put(self::STORE_ID, array_intersect_key($settings, self::defaults()));
+	}
+
+	public static function isWritable(): bool {
+		return self::store()->isWritable();
+	}
+
+	public static function isActive(): bool {
+		$s = self::load();
+
+		return !empty($s['ativo']) && $s['url'] !== '' && $s['usuario'] !== '' && $s['senha'] !== '';
+	}
+
+	/**
+	 * @return string[]  erros de validação
+	 */
+	public static function validate(array $s): array {
+		$errors = [];
+
+		if ($s['url'] !== '' && !preg_match('~^https?://[^\s/]+~i', $s['url'])) {
+			$errors[] = 'Endereço inválido. Use algo como https://empresa.topdesk.net';
+		}
+
+		if (!empty($s['ativo'])) {
+			foreach (['url' => 'Endereço', 'usuario' => 'Usuário', 'senha' => 'Senha', 'cliente' => 'Cliente'] as $k => $label) {
+				if (trim((string) $s[$k]) === '') {
+					$errors[] = sprintf('Para ativar a integração, preencha "%s".', $label);
+				}
+			}
+		}
+
+		if ($s['solicitante_padrao'] !== '' && !filter_var($s['solicitante_padrao'], FILTER_VALIDATE_EMAIL)) {
+			$errors[] = 'O solicitante padrão deve ser um e-mail.';
+		}
+
+		if (trim($s['campos_extras']) !== '') {
+			$extra = json_decode($s['campos_extras'], true);
+
+			// array_is_list() só existe a partir do PHP 8.1.
+			if (!is_array($extra) || ($extra && array_keys($extra) === range(0, count($extra) - 1))) {
+				$errors[] = 'Campos extras: informe um objeto JSON, ex.: {"entryType": {"name": "Zabbix"}}';
+			}
+		}
+
+		return $errors;
+	}
+
+	/**
+	 * Valor de referência do TOPdesk: UUID vira {"id"}, qualquer outro texto vira {"name"}.
+	 */
+	public static function reference(string $value): array {
+		$value = trim($value);
+
+		return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value)
+			? ['id' => $value]
+			: ['name' => $value];
+	}
+}
+HOSTFLOW_EOF
+
+# ---- lib/topdesk/ZabbixExport.php
+cat > "$MOD/lib/topdesk/ZabbixExport.php" <<'HOSTFLOW_EOF'
+<?php declare(strict_types = 0);
+
+namespace Modules\HostFlow\Lib\Topdesk;
+
+use Modules\HostFlow\Lib\Form\HostState;
+
+/**
+ * Gera o arquivo de importação do Zabbix 7.4 (Data collection › Hosts › Import) para o host de uma
+ * solicitação de criação. Grupos inexistentes são criados se "Create new" estiver marcado na importação;
+ * templates precisam existir.
+ */
+final class ZabbixExport {
+
+	public const SECRET_PLACEHOLDER = '******';
+
+	private const INTERFACE_TYPES = ['agent' => 'ZABBIX', 'snmp' => 'SNMP', 'ipmi' => 'IPMI', 'jmx' => 'JMX'];
+	private const DEFAULT_PORTS = ['agent' => '10050', 'snmp' => '161', 'ipmi' => '623', 'jmx' => '12345'];
+	private const SNMP_ENUMS = [
+		'version' => ['1' => 'SNMPV1', '2' => 'SNMPV2', '3' => 'SNMPV3'],
+		'bulk' => ['0' => 'NO', '1' => 'YES'],
+		'securitylevel' => ['0' => 'NOAUTHNOPRIV', '1' => 'AUTHNOPRIV', '2' => 'AUTHPRIV'],
+		'authprotocol' => ['0' => 'MD5', '1' => 'SHA1', '2' => 'SHA224', '3' => 'SHA256', '4' => 'SHA384',
+			'5' => 'SHA512'
+		],
+		'privprotocol' => ['0' => 'DES', '1' => 'AES128', '2' => 'AES192', '3' => 'AES256', '4' => 'AES192C',
+			'5' => 'AES256C'
+		]
+	];
+	private const SECRET_SNMP_KEYS = ['community', 'authpassphrase', 'privpassphrase'];
+
+	/**
+	 * @param array $payload       payload da solicitação (PayloadBuilder)
+	 * @param bool  $with_secrets  false = community/passphrases literais viram "******" (macros {$...} são mantidas)
+	 */
+	public static function build(array $payload, bool $with_secrets): array {
+		$state = HostState::apply(HostState::emptyState(), $payload);
+		$host = [
+			'host' => $state['host']['host'],
+			'name' => ($state['host']['name'] !== '') ? $state['host']['name'] : $state['host']['host'],
+			'status' => ((string) $state['host']['status'] === '1') ? 'DISABLED' : 'ENABLED'
+		];
+
+		if ($state['host']['description'] !== '') {
+			$host['description'] = $state['host']['description'];
+		}
+
+		if ($state['proxy'] !== null) {
+			$host['monitored_by'] = 'PROXY';
+			$host['proxy'] = ['name' => $state['proxy']];
+		}
+		elseif ($state['proxy_group'] !== null) {
+			$host['monitored_by'] = 'PROXY_GROUP';
+			$host['proxy_group'] = ['name' => $state['proxy_group']];
+		}
+
+		if ($state['templates']) {
+			$host['templates'] = array_map(static function (string $name): array {
+				return ['name' => $name];
+			}, $state['templates']);
+		}
+
+		$host['groups'] = array_map(static function (string $name): array {
+			return ['name' => $name];
+		}, $state['groups']);
+
+		if ($state['interface']) {
+			$host['interfaces'] = [self::interface($state['interface'], $with_secrets)];
+		}
+
+		foreach ($state['tags'] as $tag => $values) {
+			foreach ($values ?: [''] as $value) {
+				$host['tags'][] = ['tag' => (string) $tag, 'value' => (string) $value];
+			}
+		}
+
+		foreach ($state['macros'] as $macro => $value) {
+			$host['macros'][] = ['macro' => (string) $macro, 'value' => (string) $value];
+		}
+
+		if ($state['inventory']) {
+			$host['inventory_mode'] = 'MANUAL';
+			$host['inventory'] = array_map('strval', $state['inventory']);
+		}
+
+		return [
+			'zabbix_export' => [
+				'version' => '7.4',
+				'host_groups' => array_map(static function (string $name): array {
+					// A importação exige uuid (v4, 32 hex) nos grupos; derivado do nome para ser estável.
+					return ['uuid' => self::uuid('hostflow-group:'.$name), 'name' => $name];
+				}, $state['groups']),
+				'hosts' => [$host]
+			]
+		];
+	}
+
+	private static function uuid(string $seed): string {
+		$h = md5($seed);
+		$h[12] = '4';
+		$h[16] = '89ab'[hexdec($h[16]) & 3];
+
+		return $h;
+	}
+
+	private static function interface(array $if, bool $with_secrets): array {
+		$type = $if['type'] ?? 'agent';
+		$useip = (string) ($if['useip'] ?? (($if['ip'] ?? '') !== '' ? '1' : '0'));
+
+		$result = [
+			'type' => self::INTERFACE_TYPES[$type] ?? strtoupper((string) $type),
+			'useip' => ($useip === '0') ? 'NO' : 'YES'
+		];
+
+		if (($if['ip'] ?? '') !== '') {
+			$result['ip'] = $if['ip'];
+		}
+
+		if (($if['dns'] ?? '') !== '') {
+			$result['dns'] = $if['dns'];
+		}
+
+		$result['port'] = (($if['port'] ?? '') !== '') ? (string) $if['port'] : (self::DEFAULT_PORTS[$type] ?? '');
+
+		if ($type === 'snmp') {
+			$details = [];
+
+			foreach ($if['snmp'] ?? [] as $key => $value) {
+				$value = (string) $value;
+
+				if (isset(self::SNMP_ENUMS[$key])) {
+					$value = self::SNMP_ENUMS[$key][$value] ?? strtoupper($value);
+				}
+				elseif (!$with_secrets && in_array($key, self::SECRET_SNMP_KEYS, true) && $value !== ''
+						&& strpos($value, '{$') !== 0) {
+					$value = self::SECRET_PLACEHOLDER;
+				}
+
+				$details[$key] = $value;
+			}
+
+			if ($details) {
+				$result['details'] = $details;
+			}
+		}
+
+		$result['interface_ref'] = 'if1';
+
+		return $result;
+	}
+}
+HOSTFLOW_EOF
+
 # ---- manifest.json
 cat > "$MOD/manifest.json" <<'HOSTFLOW_EOF'
 {
@@ -4805,6 +5617,14 @@ cat > "$MOD/manifest.json" <<'HOSTFLOW_EOF'
 		"hostflow.request.submit": {
 			"class": "RequestSubmit",
 			"view": "hostflow.request.new"
+		},
+		"hostflow.topdesk.edit": {
+			"class": "TopdeskEdit",
+			"view": "hostflow.topdesk.edit"
+		},
+		"hostflow.topdesk.save": {
+			"class": "TopdeskSave",
+			"view": "hostflow.topdesk.edit"
 		}
 	},
 	"assets": {
@@ -5379,6 +6199,142 @@ if ($host_field !== null && !$host_selected) {
 }
 
 $form->addItem($grid);
+$page->addItem($form)->show();
+HOSTFLOW_EOF
+
+# ---- views/hostflow.topdesk.edit.php
+cat > "$MOD/views/hostflow.topdesk.edit.php" <<'HOSTFLOW_EOF'
+<?php declare(strict_types = 0);
+/**
+ * @var CView $this
+ * @var array $data
+ */
+
+use Modules\HostFlow\Lib\Topdesk\TopdeskSettings;
+use Modules\HostFlow\Lib\Ui;
+
+$s = $data['settings'];
+$page = (new CHtmlPage())->setTitle(_('Integração TOPdesk'));
+
+$page->addItem((new CDiv(
+	'Com a integração ativa, cada solicitação válida abre um chamado no TOPdesk com o título '.
+	'"[CLIENTE] - Nova solicitação - <formulário>". O solicitante é o e-mail do usuário do Zabbix que preencheu. '.
+	'O JSON da solicitação vai como ação oculta para o solicitante e, em formulários de criação, o arquivo de '.
+	'importação do host no Zabbix é anexado (também oculto).'
+))->addClass('hf-intro'));
+
+if (!$data['writable']) {
+	$page->addItem(Ui::notice('O diretório de dados não tem permissão de escrita: a configuração não poderá ser salva.',
+		'bad'
+	));
+}
+
+if ($data['errors']) {
+	$page->addItem(Ui::errorBox('Não foi possível salvar', $data['errors']));
+}
+
+if ($data['test'] !== null) {
+	$page->addItem(Ui::notice($data['test']['mensagem'], $data['test']['ok'] ? 'good' : 'bad'));
+}
+
+$hint = static function (string $text): CDiv {
+	return (new CDiv($text))->addClass(ZBX_STYLE_FORM_FIELDS_HINT);
+};
+
+$text = static function (string $name, string $value, string $hint_text = '') use ($hint): CFormField {
+	$items = [(new CTextBox($name, $value))->setId('hf_td_'.$name)->setWidth(ZBX_TEXTAREA_STANDARD_WIDTH)];
+
+	if ($hint_text !== '') {
+		$items[] = $hint($hint_text);
+	}
+
+	return new CFormField($items);
+};
+
+$check = static function (string $name, bool $checked): CCheckBox {
+	return (new CCheckBox($name, '1'))->setId('hf_td_'.$name)->setChecked($checked)->setUncheckedValue('0');
+};
+
+$grid = (new CFormGrid())
+	->addItem([new CLabel(_('Ativar integração'), 'hf_td_ativo'), new CFormField($check('ativo', (bool) $s['ativo']))])
+
+	->addItem(new CFormField((new CTag('h3', true, _('Conexão')))->addClass('hf-section-title')))
+	->addItem([
+		(new CLabel(_('Endereço'), 'hf_td_url'))->setAsteriskMark(),
+		$text('url', $s['url'], 'Ex.: https://empresa.topdesk.net (sem /tas/api).')
+	])
+	->addItem([
+		(new CLabel(_('Usuário da API'), 'hf_td_usuario'))->setAsteriskMark(),
+		$text('usuario', $s['usuario'], 'Login do operador usado pela integração.')
+	])
+	->addItem([
+		(new CLabel(_('Application password'), 'hf_td_senha'))->setAsteriskMark(),
+		new CFormField([
+			(new CPassBox('senha', '', 255))->setId('hf_td_senha')->setWidth(ZBX_TEXTAREA_STANDARD_WIDTH)
+				->setAttribute('autocomplete', 'new-password')
+				->setAttribute('placeholder', $data['has_password'] ? '•••••• (gravada, deixe vazio para manter)' : ''),
+			$data['has_password'] ? new CLabel([$check('limpar_senha', false), ' Apagar a senha gravada'],
+				'hf_td_limpar_senha'
+			) : null,
+			$hint('Gerada no TOPdesk em Configurações do usuário › Application passwords. Não é a senha de login.')
+		])
+	])
+	->addItem([new CLabel(_('Verificar certificado SSL'), 'hf_td_verificar_ssl'),
+		new CFormField($check('verificar_ssl', (bool) $s['verificar_ssl']))
+	])
+
+	->addItem(new CFormField((new CTag('h3', true, _('Chamado')))->addClass('hf-section-title')))
+	->addItem([
+		(new CLabel(_('Cliente'), 'hf_td_cliente'))->setAsteriskMark(),
+		$text('cliente', $s['cliente'], 'Vai no título: [CLIENTE] - Nova solicitação - Nome do formulário. '.
+			'O TOPdesk limita o título a 80 caracteres; o excedente é cortado.'
+		)
+	])
+	->addItem([
+		new CLabel(_('Solicitante padrão (e-mail)'), 'hf_td_solicitante_padrao'),
+		$text('solicitante_padrao', $s['solicitante_padrao'],
+			'Usado só quando o usuário do Zabbix não tem e-mail nas mídias e o username não é um e-mail.'
+		)
+	]);
+
+foreach (TopdeskSettings::LOOKUPS as $key => [$label, , $extra_hint]) {
+	$grid->addItem([
+		new CLabel($label, 'hf_td_'.$key),
+		$text($key, $s[$key], trim('ID (UUID) ou nome exato no TOPdesk. Vazio = não enviar. '.$extra_hint))
+	]);
+}
+
+$grid
+	->addItem([
+		new CLabel(_('Campos extras (JSON)'), 'hf_td_campos_extras'),
+		new CFormField([
+			(new CTextArea('campos_extras', $s['campos_extras']))
+				->setId('hf_td_campos_extras')
+				->setRows(4)
+				->addClass('hf-mono')
+				->setWidth(ZBX_TEXTAREA_STANDARD_WIDTH),
+			$hint('Mesclado no corpo do POST /tas/api/incidents. Ex.: {"entryType": {"name": "Zabbix"}}')
+		])
+	])
+	->addItem([
+		new CLabel(_('Enviar segredos SNMP'), 'hf_td_enviar_segredos'),
+		new CFormField([
+			$check('enviar_segredos', (bool) $s['enviar_segredos']),
+			$hint('Desmarcado: community e passphrases digitadas vão como ****** no JSON e no arquivo do Zabbix '.
+				'(macros {$...} são mantidas).'
+			)
+		])
+	])
+	->addItem(new CFormActions(new CSubmit('save', _('Salvar')), [
+		(new CSubmit('testar', _('Salvar e testar conexão')))->addClass(ZBX_STYLE_BTN_ALT)
+	]));
+
+$form = (new CForm('post', (new CUrl('zabbix.php'))->setArgument('action', 'hostflow.topdesk.save')->getUrl()))
+	->setName('hf_topdesk_form')
+	->setAttribute('autocomplete', 'off')
+	->addItem((new CVar(CSRF_TOKEN_NAME, CCsrfTokenHelper::get('hostflow.topdesk.save')))->removeId())
+	->addItem($grid);
+
 $page->addItem($form)->show();
 HOSTFLOW_EOF
 

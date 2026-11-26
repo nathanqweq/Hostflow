@@ -5,7 +5,7 @@ Módulo de frontend do Zabbix 7.4 para:
 1. **o admin (Super admin) criar formulários** num construtor visual, ou editando o JSON;
 2. **o usuário preencher** um formulário que só aceita valores válidos: listas fechadas, grupos/templates/proxies existentes, IP/DNS/regex validados no servidor.
 
-O que acontece **depois do submit fica em aberto nesta versão**. O envio válido monta um pacote completo (resumo, payload técnico, diff contra o host atual, justificativa, solicitante) e o entrega a um `SubmitHandler`. O handler padrão não envia nada. A integração com um sistema de chamados vai entrar como um handler.
+O envio válido monta um pacote completo (resumo, payload técnico, diff contra o host atual, justificativa, solicitante) e o entrega a um `SubmitHandler`. Com a **integração TOPdesk** ativa (*Solicitações › Integração TOPdesk*), ele abre um chamado (veja [Integração TOPdesk](#integração-topdesk)). Sem ela, nada é enviado.
 
 O módulo é genérico: nada do ambiente fica fixo no código. Sites, clientes, categorias, árvore de grupos, tags, proxies e templates são cadastrados pela interface, em *Listas de valores* e *Formulários*. Os arquivos em `examples/` são só pontos de partida neutros.
 
@@ -38,7 +38,8 @@ hostflow/                         -> copiar para <frontend>/modules/hostflow
 │   ├── form/Submission.php       validação do ENVIO (obrigatório, regex, IP, listas, duplicidade…)
 │   ├── form/PayloadBuilder.php   valores + mapeamentos + valores fixos -> payload do host
 │   ├── form/HostState.php        estado atual do host, mesclagem, diff, pré-preenchimento
-│   └── submit/SubmitHandler.php, NullSubmitHandler.php   ponto de extensão pós-submit (sistema de chamados)
+│   ├── submit/SubmitHandler.php, NullSubmitHandler.php, TopdeskSubmitHandler.php   pós-submit
+│   └── topdesk/                  TopdeskSettings (config), TopdeskClient (REST), ZabbixExport (arquivo de importação)
 ├── views/                        hostflow.*.php (todo texto passa por CTag, que escapa HTML)
 ├── assets/js/                    hostflow.builder.js (construtor), hostflow.request.js (form), hostflow.common.js
 ├── assets/css/hostflow.css
@@ -189,6 +190,31 @@ Campos e valores fixos aceitam uma condição com uma ou mais regras:
   - `hostid` e `operacao`.
 - **Placeholders** num padrão vazio são ignorados, então nunca geram `A//B`. Em alteração, um campo vazio não muda nada.
 
+## Integração TOPdesk
+
+Em *Solicitações › Integração TOPdesk* (só para Super admin), configure:
+
+- endereço, usuário e **application password** da API;
+- o **cliente**;
+- a classificação do chamado: tipo, categoria, subcategoria, impacto, urgência, prioridade, grupo de operadores, operador, SLA e contrato.
+
+Cada campo de classificação aceita o ID (UUID) ou o nome exato cadastrado no TOPdesk. O botão **Salvar e testar conexão** consulta `/tas/api/version` e `/tas/api/incidents/call_types`. A configuração fica em `<data_dir>/settings/topdesk.json` (0660). A senha nunca é devolvida ao navegador: deixar o campo vazio mantém a senha gravada.
+
+O que cada envio válido gera (`POST /tas/api/incidents`):
+
+| Item | Conteúdo |
+|---|---|
+| Título (`briefDescription`) | `[CLIENTE] - Nova solicitação - <nome do formulário>`, cortado em 80 caracteres (limite do TOPdesk) |
+| Solicitante | `callerLookup.email` com o e-mail do usuário do Zabbix: a primeira mídia com "@", ou o username se ele for um e-mail, ou o *solicitante padrão* da configuração. Se o e-mail não existir como pessoa no TOPdesk, o chamado é aberto com solicitante não cadastrado (`caller.dynamicName` + `email`) |
+| Solicitação (`request`) | dados informados e justificativa, visíveis ao solicitante |
+| Ação oculta (`action`, `actionInvisibleForCaller`) | JSON da solicitação: formulário, solicitante, valores, payload, diff |
+| Anexo oculto (só em formulários de criação) | `zabbix-import-<host>.json`, para importar em *Data collection › Hosts › Import* com "Create new" marcado para grupos. Os templates precisam existir |
+
+- Community e passphrases SNMP digitadas vão como `******`, a menos que *Enviar segredos SNMP* esteja marcado. Macros `{$...}` são mantidas.
+- *Campos extras (JSON)* é mesclado no corpo do POST, para campos que a tela ainda não tem (ex.: `{"entryType": {"name": "Zabbix"}}`).
+- Se `submit_handler` estiver definido em `hostflow.conf.php`, essa classe tem prioridade sobre o TOPdesk.
+- O servidor do frontend precisa da extensão PHP `curl` e de acesso HTTPS ao TOPdesk.
+
 ## Limitações conhecidas desta versão
 
 - As checagens de duplicidade (hostname, IP) e de existência de grupos rodam com a **sessão de quem envia**. Por isso só enxergam o que esse usuário pode ler. A revalidação completa cabe à etapa de execução.
@@ -198,7 +224,7 @@ Campos e valores fixos aceitam uma condição com uma ou mais regras:
 
 ## Próximas etapas
 
-1. **Sistema de chamados:** um `SubmitHandler` que abre o chamado para `equipe_responsavel`, usando o resumo e o diff. Ele é ativado em `submit_handler`.
+1. **Sistema de chamados:** a integração TOPdesk está feita. Falta o destino por formulário (`equipe_responsavel` → grupo de operadores) e gravar o número do chamado no histórico.
 2. **Histórico:** guardar as solicitações enviadas (hoje nada é gravado depois do submit).
 3. **Fila de aprovação e execução via API** com a sessão do aprovador, como no escopo original.
 4. **Versão 2:** import em lote via CSV.

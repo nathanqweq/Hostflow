@@ -2,6 +2,7 @@
 
 namespace Modules\HostFlow\Actions;
 
+use API;
 use CControllerResponseData;
 use CControllerResponseFatal;
 use CWebUser;
@@ -11,6 +12,8 @@ use Modules\HostFlow\Lib\Form\Options;
 use Modules\HostFlow\Lib\Form\Submission;
 use Modules\HostFlow\Lib\Submit\NullSubmitHandler;
 use Modules\HostFlow\Lib\Submit\SubmitHandler;
+use Modules\HostFlow\Lib\Submit\TopdeskSubmitHandler;
+use Modules\HostFlow\Lib\Topdesk\TopdeskSettings;
 use Throwable;
 
 class RequestSubmit extends BaseAction {
@@ -105,7 +108,8 @@ class RequestSubmit extends BaseAction {
 				'userid' => CWebUser::$data['userid'] ?? null,
 				'username' => CWebUser::$data['username'] ?? null,
 				'name' => CWebUser::$data['name'] ?? '',
-				'surname' => CWebUser::$data['surname'] ?? ''
+				'surname' => CWebUser::$data['surname'] ?? '',
+				'email' => self::requesterEmail()
 			],
 			'enviado_em' => time()
 		];
@@ -127,6 +131,9 @@ class RequestSubmit extends BaseAction {
 		$this->setResponse($response);
 	}
 
+	/**
+	 * Ordem: classe explícita em submit_handler (hostflow.conf.php) > TOPdesk ativo na interface > nada.
+	 */
 	private static function handler(): SubmitHandler {
 		$class = Config::get('submit_handler');
 
@@ -135,7 +142,44 @@ class RequestSubmit extends BaseAction {
 			return new $class();
 		}
 
+		if (TopdeskSettings::isActive()) {
+			return new TopdeskSubmitHandler();
+		}
+
 		return new NullSubmitHandler();
+	}
+
+	/**
+	 * E-mail do usuário logado: primeira mídia com "@" (todo usuário pode ler o próprio cadastro);
+	 * se não houver, o username quando ele já é um e-mail.
+	 */
+	private static function requesterEmail(): string {
+		try {
+			$users = API::User()->get([
+				'output' => ['userid'],
+				'selectMedias' => ['sendto'],
+				'userids' => [CWebUser::$data['userid'] ?? 0]
+			]);
+		}
+		catch (Throwable $e) {
+			$users = [];
+		}
+
+		$medias = (is_array($users) && $users) ? ($users[0]['medias'] ?? []) : [];
+
+		foreach ($medias as $media) {
+			foreach ((array) ($media['sendto'] ?? []) as $sendto) {
+				$sendto = trim((string) $sendto);
+
+				if (filter_var($sendto, FILTER_VALIDATE_EMAIL)) {
+					return $sendto;
+				}
+			}
+		}
+
+		$username = (string) (CWebUser::$data['username'] ?? '');
+
+		return filter_var($username, FILTER_VALIDATE_EMAIL) ? $username : '';
 	}
 
 	/**
